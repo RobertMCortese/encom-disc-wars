@@ -19,6 +19,11 @@ on its own after a while, so a match left running never wears every platform
 away. The camera pulls back for a bigger match and drifts toward the action;
 the 1v1 keeps the fixed framing it was composed around.
 
+A fighter that goes over the edge is **out for the round**. Nobody comes back
+until one side has been cleared off the board entirely; then every ring rises,
+both teams rez in and the next round begins. A team match is a war of
+attrition — three a side worn down to one, and now and then a clean sweep.
+
 Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
 ## The fight

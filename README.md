@@ -1,11 +1,25 @@
 # ENCOM Disc Wars
 
-Two programs duel with identity discs on rings floating above an arena floor.
-It runs in a browser, on a canvas, in any of six colour schemes.
+Programs duel with identity discs on rings floating above an arena floor —
+one on one, or two ranks of three. It runs in a browser, on a canvas, in any
+of six colour schemes.
 
 **[Watch it →](https://robertmcortese.github.io/encom-disc-wars/)**
 
 ![The duel: a teal program and an orange sentinel on their rings](docs/duel.png)
+
+## Matches
+
+**1v1** is the duel. **2v2** and **3v3** put two ranks of platforms facing each
+other across a wider arena, every fighter on its own rings. As many exchanges
+run at once as there are fighters on a side, so a 3v3 keeps three discs in the
+air; fighters mostly stay on the opponent they are fighting, gang up on one
+left hanging from an edge, and now and then switch. A broken ring rises again
+on its own after a while, so a match left running never wears every platform
+away. The camera pulls back for a bigger match and drifts toward the action;
+the 1v1 keeps the fixed framing it was composed around.
+
+Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
 ## The fight
 

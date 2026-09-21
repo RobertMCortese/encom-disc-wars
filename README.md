@@ -23,6 +23,11 @@ A scoreboard across the top carries each side's name, a pip per fighter that
 goes dark as it is knocked out, and the rounds won, with the winning side
 named beneath when a round ends.
 
+Once a teammate is out its platform stands empty, and the survivors can dodge
+**across onto it**: a longer, higher jump to the next platform along the rank,
+never onto the other side's and never onto one somebody is already standing
+on. The rank thins out and spreads as the round wears on.
+
 A fighter that goes over the edge is **out for the round**. Nobody comes back
 until one side has been cleared off the board entirely; then every ring rises,
 both teams rez in and the next round begins. A team match is a war of

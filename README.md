@@ -56,6 +56,21 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
+## Embedding it
+
+Two things change when the page is served by the ENCOM Boardroom, which runs
+it as a desktop screensaver:
+
+- `#screensaver` or `#wallpaper` in the URL hides the page's own chrome, so
+  there is nothing on the screen but the duel.
+- If the host serves its own `/palette.js` defining `window.encomPalette`, the
+  duel is drawn in those colours instead of the six here, and the chips step
+  aside. The `palette.js` in this repo is only a placeholder for when nobody
+  overrides it.
+
+Neither applies when the page is served on its own, so the same three files
+work in both places with no build step.
+
 ## Where it comes from
 
 This is a port of the lock screen from

@@ -44,6 +44,13 @@ long, every **block** a whole one. Where a throw is aimed sets which register
 its run starts in, blocks answer by walking back down, and the two sides sit
 an octave apart — so what you are hearing is who is doing what.
 
+**The tempo follows the round.** Every fighter knocked out takes it up ten
+— a 3v3 runs 120 up to as much as 170 as it is worn down to a win, then drops
+back to 120 for the next round, so a round always ends faster than it began.
+A tempo change waits for the top of a bar rather than landing wherever the
+fight puts it: stepping tempo mid-phrase smears the run already playing, and
+a bar line is where a tempo change belongs.
+
 The one thing that makes this music rather than clatter is that nothing plays
 when it happens. A throw lands wherever it lands and its run is held until
 the next eighth on the grid, so it falls on the beat. At 120 BPM that wait is

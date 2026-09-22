@@ -49,11 +49,22 @@ under somebody, a **tom** — high, mid or low at random — for every block and
 every bounce off the glass or the ceiling, and a **ride** for every derez.
 Those are never dropped when the bar is busy; only the melodic runs are.
 
-**The figure belongs to the fighter.** Its length and the shape of its walk
-through the scale are hashed out of the name, so GREP throws the same phrase
-every time, ALEXIOS a different one, and a champion carries its sound into
-the next round along with its record. Nothing is stored — the same name
-always gives the same figure. Where a throw is aimed sets which register
+**The figure belongs to the fighter.** Its length, the shape of its walk
+through the scale, where its notes fall and how long each one rings are all
+hashed out of the name, so GREP throws the same phrase every time, ALEXIOS a
+different one, and a champion carries its sound into the next round along
+with its record. Nothing is stored — the same name always gives the same
+figure.
+
+The rhythm is deliberately not an even run of sixteenths. Attack Magazine,
+writing about how Daft Punk's parts are put together, puts the hallmark as
+almost every consecutive note having a different length, with the emphasis
+moving around the sixteenths of the bar rather than sitting on the same ones,
+and gaps left on purpose. So a figure carries three cells — where the notes
+fall, how long each rings, and where it steps to — of lengths 4, 3 and 3,
+which come back into phase only every twelve notes, and a note that has had
+room before it lands harder. None of this is anyone's melody; it is a way of
+spacing notes. Where a throw is aimed sets which register
 its run starts in, blocks answer by walking back down, and the two sides sit
 an octave apart — so what you are hearing is who is doing what.
 

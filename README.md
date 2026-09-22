@@ -122,9 +122,17 @@ it answered, so it comes back out when that situation comes round again.
 to start itself — kept as well, but reached for half as often, because a
 pattern you begin yourself is the readable kind.
 
-Each pair is named with a verb and an animal — DIVING EEL, CUTTING LYNX — and
-the champion's palette is listed under the scoreboard with counters marked.
-Only a champion keeps a palette; everyone else starts empty.
+Taking the ring out from under somebody already hanging is a third kind, a
+**finish**. Each pair is named with a verb and an animal — DIVING EEL,
+COILING OSPREY — and the champion's palette is listed under the scoreboard
+with counters marked. Only a champion keeps a palette; everyone else starts
+empty.
+
+**Knowing a move also makes you better at it.** A throw a fighter has made
+before finds its mark more often — 0.20 rising towards 0.36 — and a finish it
+has done before is thrown without hesitating, the disc arriving in 0.85 s
+instead of 1.25 and leaving far less room to climb out of. The gain flattens
+off, so the tenth repetition is worth much less than the second.
 
 **A champion still standing at the end of a round keeps the place**, however
 the points fell — the title is held until somebody takes it off them, not

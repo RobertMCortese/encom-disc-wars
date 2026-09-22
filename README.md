@@ -35,6 +35,28 @@ attrition — three a side worn down to one, and now and then a clean sweep.
 
 Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
+## The fight plays itself
+
+Turn Sound on and the arena becomes a sequencer. A four-on-the-floor kick
+with a snare on two and four holds **120 BPM** underneath. On top of that the
+fight writes the part: every **throw** fires a chromatic run half a measure
+long, every **block** a whole one. Where a throw is aimed sets which register
+its run starts in, blocks answer by walking back down, and the two sides sit
+an octave apart — so what you are hearing is who is doing what.
+
+The one thing that makes this music rather than clatter is that nothing plays
+when it happens. A throw lands wherever it lands and its run is held until
+the next eighth on the grid, so it falls on the beat. At 120 BPM that wait is
+never more than a quarter second, which reads as tight rather than late, and
+the disc is still in the air either way.
+
+Nothing is composed and nothing is sampled: oscillators, one buffer of noise,
+and a scheduler running off the audio clock. A 3v3 with three exchanges in
+the air sounds like a busier bar than a duel does, which is the point.
+
+Off until you ask for it — browsers require a click before any audio, and a
+page that made noise on open would deserve to be closed.
+
 ## The fighters learn
 
 A throw is aimed high, at the body, or low, and each guard answers exactly

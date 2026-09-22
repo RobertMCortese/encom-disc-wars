@@ -76,10 +76,18 @@ fight puts it: stepping tempo mid-phrase smears the run already playing, and
 a bar line is where a tempo change belongs.
 
 The one thing that makes this music rather than clatter is that nothing plays
-when it happens. A throw lands wherever it lands and its run is held until
-the next eighth on the grid, so it falls on the beat. At 120 BPM that wait is
-never more than a quarter second, which reads as tight rather than late, and
-the disc is still in the air either way.
+when it happens. A throw lands wherever it lands, and its run is held until
+the next **beat**; a block waits for the next **half bar**. A line never
+starts in the middle of one, which is the difference between a part and a
+pile of events. The kit stays on the eighths, where it can answer off the
+beat. At 120 BPM the longest of those waits is a second, and the disc is
+still in the air either way.
+
+A fighter over the edge holds on until it climbs back or is finished off, and
+for as long as it does, the first note of its figure is **arpeggiated**
+underneath everything — the note, a third above it, its octave — quietly,
+once an eighth. It is the one sound in the arena that is held rather than
+struck, so it reads as somebody still out there.
 
 Nothing is composed and nothing is sampled: oscillators, one buffer of noise,
 and a scheduler running off the audio clock. A 3v3 with three exchanges in

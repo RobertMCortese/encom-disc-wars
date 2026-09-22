@@ -39,8 +39,10 @@ Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
 Turn Sound on and the arena becomes a sequencer. A four-on-the-floor kick
 with a snare on two and four holds **120 BPM** underneath. On top of that the
-fight writes the part: every **throw** fires a chromatic run half a measure
-long, every **block** a whole one. Where a throw is aimed sets which register
+fight writes the part: every **throw** fires a run half a measure long,
+every **block** a whole one, both walking D# natural minor less its fifth
+(D#, E#, F#, G#, B, C#) rather than semitones — so three lines at once still
+agree with each other. Where a throw is aimed sets which register
 its run starts in, blocks answer by walking back down, and the two sides sit
 an octave apart — so what you are hearing is who is doing what.
 
@@ -63,6 +65,23 @@ the air sounds like a busier bar than a duel does, which is the point.
 
 Off until you ask for it — browsers require a click before any audio, and a
 page that made noise on open would deserve to be closed.
+
+## Names, records, and the champion
+
+Fighters are named from three pools — Unix commands, Greek given names, and
+languages that are also words (BASIC, FORTRAN, PASCAL, OBERON, SWIFT) — drawn
+without repeating inside a match. The name is drawn over the head from a
+stroke font, in the same lines everything else in the arena is made of, and
+shrinks with distance along with the fighter wearing it.
+
+Each keeps its own record: throws, hits landed, blocks held, dodges, rings
+taken out from under someone, and kills. Those come to a points total — a
+kill is worth 5, a hit 3, a ring 2, a block or a dodge 1.
+
+**At the end of a round the survivor with the most points goes through**,
+carrying its name and its whole record, marked with a chevron. Everyone else
+is a new program with nothing to its name. The champion is the only thing in
+the arena that accumulates, and the only one with anything to lose.
 
 ## The fighters learn
 

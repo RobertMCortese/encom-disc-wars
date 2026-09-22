@@ -39,10 +39,16 @@ Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
 Turn Sound on and the arena becomes a sequencer. A four-on-the-floor kick
 with a snare on two and four holds **120 BPM** underneath. On top of that the
-fight writes the part: every **throw** fires a run half a measure long,
-every **block** a whole one, both walking D# natural minor less its fifth
-(D#, E#, F#, G#, B, C#) rather than semitones — so three lines at once still
-agree with each other. Where a throw is aimed sets which register
+fight writes the part: every **throw** and every **block** fires a run of
+7, 9, 11 or 13 sixteenths — three notes, a breath, then the rest — walking D#
+natural minor less its fifth (D#, E#, F#, G#, B, C#) rather than semitones,
+so three lines at once still agree with each other.
+
+**The figure belongs to the fighter.** Its length and the shape of its walk
+through the scale are hashed out of the name, so GREP throws the same phrase
+every time, ALEXIOS a different one, and a champion carries its sound into
+the next round along with its record. Nothing is stored — the same name
+always gives the same figure. Where a throw is aimed sets which register
 its run starts in, blocks answer by walking back down, and the two sides sit
 an octave apart — so what you are hearing is who is doing what.
 

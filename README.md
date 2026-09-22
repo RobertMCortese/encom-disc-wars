@@ -115,10 +115,16 @@ Each keeps its own record: throws, hits landed, blocks held, dodges, rings
 taken out from under someone, and kills. Those come to a points total — a
 kill is worth 5, a hit 3, a ring 2, a block or a dodge 1.
 
-**At the end of a round the survivor with the most points goes through**,
-carrying its name and its whole record, marked with a chevron. Everyone else
-is a new program with nothing to its name. The champion is the only thing in
-the arena that accumulates, and the only one with anything to lose.
+**A champion still standing at the end of a round keeps the place**, however
+the points fell — the title is held until somebody takes it off them, not
+lent out again each round to whoever had the best few minutes. Only when the
+champion has gone does it pass, and then to whichever survivor has most to
+show for the round.
+
+The champion carries its name and its whole record, marked with a chevron.
+Everyone else is a new program with nothing to its name. The champion is the
+only thing in the arena that accumulates, and the only one with anything to
+lose.
 
 ## The fighters learn
 

@@ -83,6 +83,13 @@ pile of events. The kit stays on the eighths, where it can answer off the
 beat. At 120 BPM the longest of those waits is a second, and the disc is
 still in the air either way.
 
+A name always gives the same figure, so the ground under it moves instead:
+**every throw shifts the key a semitone**, up or down at random, never
+further than two either way, and every fourth throw drops it back to where it
+started. Blocks are played in whatever key they answer but do not move it,
+and the kit never moves at all — a drum that followed the key around would
+stop sounding like a drum.
+
 A fighter over the edge holds on until it climbs back or is finished off, and
 for as long as it does, the first note of its figure is **arpeggiated**
 underneath everything — the note, a third above it, its octave — quietly,

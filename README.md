@@ -158,7 +158,12 @@ lent out again each round to whoever had the best few minutes. Only when the
 champion has gone does it pass, and then to whichever survivor has most to
 show for the round.
 
-The champion carries its name and its whole record, marked with a chevron.
+The champion carries its name and its whole record, and wears what it has
+held: a badge over its head that climbs the way enlisted insignia climbs — a
+chevron for the first round, a rocker under it for the second, more chevrons,
+then more rockers, and a lozenge and finally a star once there is nowhere
+else to go. Private to Sergeant Major in nine rounds, with the rank and the
+count on the scoreboard.
 Everyone else is a new program with nothing to its name. The champion is the
 only thing in the arena that accumulates, and the only one with anything to
 lose.

@@ -128,6 +128,14 @@ COILING OSPREY — and the champion's palette is listed under the scoreboard
 with counters marked. Only a champion keeps a palette; everyone else starts
 empty.
 
+Defence and recovery are learned the same way. A fighter that has hauled
+itself back over a ring edge before is better at it — a third of the time to
+begin with, rising toward three in five. One that has taken a banked shot out
+of the air is better at catching the next. And one that has answered a
+particular aim often enough can get a piece of a throw its guard did not
+cover at all: the save a fighter who has been here before makes and a new
+program does not.
+
 **Knowing a move also makes you better at it.** A throw a fighter has made
 before finds its mark more often — 0.20 rising towards 0.36 — and a finish it
 has done before is thrown without hesitating, the disc arriving in 0.85 s

@@ -35,6 +35,40 @@ attrition — three a side worn down to one, and now and then a clean sweep.
 
 Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
+## The fighters learn
+
+A throw is aimed high, at the body, or low, and each guard answers exactly
+one of the three:
+
+|            | aimed **high** | aimed **mid** | aimed **low** |
+|------------|----------------|---------------|---------------|
+| **duck**   | covered        | through       | through       |
+| **block**  | through        | covered       | through       |
+| **jump**   | through        | through       | covered       |
+
+Nothing beats anything else outright, so there is no move to settle on. The
+only way to do better than chance is to read what the opponent tends to do
+and answer that, while not being read in return — and played perfectly, both
+sides throw and guard at random and neither gains. Anything less than perfect
+is worth exploiting.
+
+Each side carries two small policy networks, one for attacking and one for
+defending, shared by its fighters so a team learns from every exchange it
+has. They train against each other while the fight runs: one sample per
+throw, from whether the guard matched the aim, by REINFORCE with a running
+baseline. An entropy term and a floor under the spread of answers keep a
+policy from collapsing onto one move, which would be duller to watch and
+immediately exploitable.
+
+Against a side with a habit they punish it: a defender that blocks 70% of the
+time is read within a few hundred throws, and sees **80%** of throws get past
+where guessing would let through 67%. Against each other they hover at the
+honest answer, which is to stay unreadable.
+
+A few hundred weights, plain arrays and loops, no library. The readout under
+the arena shows what each side has come to. Without `learn.js` the fight is
+played blind and runs exactly as before.
+
 ## The fight
 
 Nothing here is scripted or on a timeline. The two fighters take turns

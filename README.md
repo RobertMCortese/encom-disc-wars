@@ -44,6 +44,11 @@ fight writes the part: every **throw** and every **block** fires a run of
 natural minor less its fifth (D#, E#, F#, G#, B, C#) rather than semitones,
 so three lines at once still agree with each other.
 
+The rest of the fight is the kit: a **crash** for every ring smashed out from
+under somebody, a **tom** — high, mid or low at random — for every block and
+every bounce off the glass or the ceiling, and a **ride** for every derez.
+Those are never dropped when the bar is busy; only the melodic runs are.
+
 **The figure belongs to the fighter.** Its length and the shape of its walk
 through the scale are hashed out of the name, so GREP throws the same phrase
 every time, ALEXIOS a different one, and a champion carries its sound into

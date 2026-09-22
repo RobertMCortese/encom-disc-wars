@@ -45,8 +45,12 @@ natural minor less its fifth (D#, E#, F#, G#, B, C#) rather than semitones,
 so three lines at once still agree with each other.
 
 The rest of the fight is the kit: a **crash** for every ring smashed out from
-under somebody, a **tom** — high, mid or low at random — for every block and
-every bounce off the glass or the ceiling, and a **ride** for every derez.
+under somebody, a **tom** for every bounce and every block, and which one
+is not random — a disc falls through the kit as it travels: high for the
+first thing it hits, middle for the second or for a shield turning it away,
+low for the last and for its arrival back in the hand, so a throw off a wall,
+past its target, off the glass and home comes out as a descending fill that
+follows the disc, and a **ride** for every derez.
 Those are never dropped when the bar is busy; only the melodic runs are.
 
 **The figure belongs to the fighter.** Its length, the shape of its walk

@@ -115,11 +115,16 @@ Each keeps its own record: throws, hits landed, blocks held, dodges, rings
 taken out from under someone, and kills. Those come to a points total — a
 kill is worth 5, a hit 3, a ring 2, a block or a dodge 1.
 
-When a throw kills, the throw that did it and the one before it are kept
-together as a named pair — a verb and an animal, LEAPING BADGER, CLOSING EEL
-— and from then on that fighter will sometimes open with the first and follow
-with the second. Only a champion keeps its palette; everyone else starts
-empty. The champion's is listed under the scoreboard.
+A kill teaches two things, and the better of them is defensive. *"I jumped
+it, then killed with a body shot"* is a **counter**, kept against the guard
+it answered, so it comes back out when that situation comes round again.
+*"I opened high, then killed low"* is a **press**, an opening the fighter has
+to start itself — kept as well, but reached for half as often, because a
+pattern you begin yourself is the readable kind.
+
+Each pair is named with a verb and an animal — DIVING EEL, CUTTING LYNX — and
+the champion's palette is listed under the scoreboard with counters marked.
+Only a champion keeps a palette; everyone else starts empty.
 
 **A champion still standing at the end of a round keeps the place**, however
 the points fell — the title is held until somebody takes it off them, not

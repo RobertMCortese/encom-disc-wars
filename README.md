@@ -146,6 +146,12 @@ has done before is thrown without hesitating, the disc arriving in 0.85 s
 instead of 1.25 and leaving far less room to climb out of. The gain flattens
 off, so the tenth repetition is worth much less than the second.
 
+A champion is also harder to put down, in four ways that are all about not
+being killed rather than about killing: a throw that gets past its guard
+lands a third less often, the first hit each round that would break it apart
+only throws it back instead, its smashed rings rise again in half the time,
+and it is reeling for less of it after a knock-back.
+
 **A champion still standing at the end of a round keeps the place**, however
 the points fell — the title is held until somebody takes it off them, not
 lent out again each round to whoever had the best few minutes. Only when the

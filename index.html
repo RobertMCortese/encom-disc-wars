@@ -186,6 +186,15 @@
   .brains .track { right: 0; opacity: 0.2; }
   .brains .head { font-size: 8px; letter-spacing: 0.22em; opacity: 0.5; }
   @media (max-width: 620px) { .brains { display: none; } }
+  /* With a fly in every fighter the readout follows one fly a side -- the
+     champion's when it is on that side -- and draws its mushroom body: every
+     Kenyon cell at its real position, the ~5% firing for the last decision
+     lit, the output neurons sized by how hard they pull, and the dopamine
+     neurons flashing when it is rewarded. */
+  .brains.fly { grid-template-columns: auto repeat(2, auto) auto; }
+  .brains .who small { display: block; font-size: 8px; letter-spacing: 0.14em;
+                       opacity: 0.6; color: var(--chrome-dim); margin-top: 2px; }
+  .brains canvas.mb { width: 84px; height: 64px; display: block; }
 
   .credit {
     font-size: 9px; letter-spacing: 0.04em; color: var(--chrome-dim);
@@ -284,6 +293,8 @@
       <p class="credit">
         Motion captured from the
         <a href="http://mocap.cs.cmu.edu/">CMU Graphics Lab Motion Capture Database</a>.
+        Each fighter thinks with a fruit fly's mushroom body from the
+        <a href="https://doi.org/10.5281/zenodo.10676866">FlyWire connectome</a> (CC BY 4.0).
         An original scene from the ENCOM OS-12 desktop theme — a fan work, not affiliated
         with or endorsed by Disney.
       </p>
@@ -298,9 +309,11 @@
 <script src="palette.js?v=e46f3c02"></script>
 <script src="vector.js?v=4ec43c23"></script>
 <script src="learn.js?v=d1de0737"></script>
+<script src="mbdata.js?v=60a3e3e7"></script>
+<script src="flybrain.js?v=279b537e"></script>
 <script src="sound.js?v=af825e47"></script>
 <script src="poses.js?v=573e2db4"></script>
-<script src="discwars.js?v=44374e49"></script>
+<script src="discwars.js?v=61d8620b"></script>
 <script>
 (function () {
   "use strict";
@@ -441,7 +454,7 @@
       sizeChips[k].setAttribute("aria-pressed", String(Number(k) === n));
     });
     DiscWars.setTeams(n);
-    boardKey = null; brainsKey = null;
+    boardKey = null; brainsKey = null; flyKey = null;
     drawBoard(); drawBrains();
     try { localStorage.setItem("discwars.teams", String(n)); } catch (e) { /* fine */ }
   }
@@ -521,8 +534,135 @@
     }).join("") + "</div>";
   }
 
+  // ── The flies ─────────────────────────────────────────────────────────
+  // One fly a side: the champion's if it is on that side, otherwise the one
+  // on that side with most behind it.
+  var FB = window.FlyBrain;
+  var flyBuilt = false, flyKey = null;
+  var mbView = null;
+  function prepMB() {
+    if (mbView || !FB) return;
+    var D = FB.data, lo = [255, 255], hi = [0, 0];
+    ["kcXY", "mbonXY", "danXY"].forEach(function (k) {
+      for (var i = 0; i < D[k].length; i += 2) {
+        lo[0] = Math.min(lo[0], D[k][i]); hi[0] = Math.max(hi[0], D[k][i]);
+        lo[1] = Math.min(lo[1], D[k][i + 1]); hi[1] = Math.max(hi[1], D[k][i + 1]);
+      }
+    });
+    mbView = { lo: lo, hi: hi };
+  }
+  function leadFly(flies, team) {
+    var best = null;
+    flies.forEach(function (f) {
+      if (!f || f.team !== team) return;
+      if (f.champion) { best = f; return; }
+      if (best && best.champion) return;
+      if (!best || (f.alive && !best.alive) ||
+          (f.alive === best.alive && f.decisions > best.decisions)) best = f;
+    });
+    return best;
+  }
+  function paintMB(cv, f, team) {
+    var D = FB.data, dpr = Math.min(2, window.devicePixelRatio || 1);
+    var W = 84, H = 64;
+    if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    var c = cv.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    if (!f) return;
+    var col = getComputedStyle(document.documentElement)
+                .getPropertyValue(team === 0 ? "--side-a" : "--side-b").trim() || "#6fc3df";
+    var lo = mbView.lo, hi = mbView.hi;
+    // One scale for both axes, so the brain keeps its real shape.
+    var sc = Math.min((W - 6) / Math.max(1, hi[0] - lo[0]), (H - 6) / Math.max(1, hi[1] - lo[1]));
+    var ox = (W - (hi[0] - lo[0]) * sc) / 2, oy = (H - (hi[1] - lo[1]) * sc) / 2;
+    function X(v) { return ox + (v - lo[0]) * sc; }
+    function Y(v) { return oy + (v - lo[1]) * sc; }
+    var i, k;
+    c.fillStyle = col;
+    c.globalAlpha = 0.13;                                       // every Kenyon cell
+    for (i = 0; i < D.kcXY.length; i += 2) c.fillRect(X(D.kcXY[i]), Y(D.kcXY[i + 1]), 1, 1);
+    var last = f.last;
+    if (last) {                                                 // the ~5% that fired
+      c.globalAlpha = 0.95;
+      for (i = 0; i < last.kcs.length; i++) {
+        k = last.kcs[i];
+        c.fillRect(X(D.kcXY[k * 2]) - 0.5, Y(D.kcXY[k * 2 + 1]) - 0.5, 2, 2);
+      }
+    }
+    // The output neurons, sized by how hard each pulls toward its move.
+    var top = 0;
+    if (last) for (i = 0; i < last.drive.length; i++) top = Math.max(top, Math.abs(last.drive[i]));
+    for (i = 0; i < D.mbonType.length; i++) {
+      var v = last && top ? Math.abs(last.drive[i]) / top : 0;
+      c.globalAlpha = 0.35 + 0.65 * v;
+      c.beginPath();
+      c.arc(X(D.mbonXY[i * 2]), Y(D.mbonXY[i * 2 + 1]), 1.2 + 2.2 * v, 0, Math.PI * 2);
+      c.fill();
+    }
+    // Dopamine: the DANs that teach the rewarded move's compartments flash.
+    var da = f.lastDA, age = da ? (Date.now() - da.at) / 900 : 1;
+    if (da && age < 1) {
+      c.fillStyle = "#ffffff";
+      var seen = {};
+      da.mbons.forEach(function (m) {
+        FB.mbonDans[m].forEach(function (d) {
+          if (seen[d]) return;
+          seen[d] = 1;
+          c.globalAlpha = (1 - age) * Math.min(1, 0.4 + da.amount / 6);
+          c.fillRect(X(D.danXY[d * 2]) - 1, Y(D.danXY[d * 2 + 1]) - 1, 2.5, 2.5);
+        });
+      });
+    }
+    c.globalAlpha = 1;
+  }
+  function drawFlies(flies) {
+    prepMB();
+    if (!flyBuilt) {
+      brainsBox.classList.add("fly");
+      var html = '<div class="head"></div><div class="head">Aims at</div>' +
+                 '<div class="head">Answers with</div><div class="head">Mushroom body</div>';
+      [0, 1].forEach(function (t) {
+        html += '<div class="who ' + (t === 0 ? "a" : "b") + '" id="flywho' + t + '"></div>' +
+                '<div id="flyaim' + t + '"></div><div id="flyguard' + t + '"></div>' +
+                '<canvas class="mb" id="flymb' + t + '" aria-hidden="true"></canvas>';
+      });
+      brainsBox.innerHTML = html;
+      brainsBox.title = "Each fighter has the mushroom body of a real fruit fly (FlyWire connectome: " +
+        FB.sizes.kc + " Kenyon cells, " + FB.sizes.mbon + " output neurons, " +
+        FB.sizes.dan + " dopamine neurons). It starts untrained and learns from dopamine.";
+      flyBuilt = true; flyKey = null;
+    }
+    brainsBox.hidden = false;
+    var leads = [leadFly(flies, 0), leadFly(flies, 1)];
+    var key = leads.map(function (f) {
+      return f ? f.name + f.champion + f.decisions + Math.round(f.dopamine) +
+                 f.aims.concat(f.guards).map(function (v) { return v.toFixed(2); }).join() : "-";
+    }).join("|");
+    if (key !== flyKey) {
+      flyKey = key;
+      leads.forEach(function (f, t) {
+        var side = t === 0 ? "a" : "b";
+        document.getElementById("flywho" + t).innerHTML = f
+          ? (f.champion ? "★ " : "") + f.name +
+            "<small>" + f.decisions + (f.decisions === 1 ? " MOVE" : " MOVES") +
+            " · " + Math.round(f.dopamine) + " DA</small>"
+          : "";
+        document.getElementById("flyaim" + t).outerHTML = f
+          ? mixRow(side, AIM_LABELS, f.aims).replace('<div class="', '<div id="flyaim' + t + '" class="')
+          : '<div id="flyaim' + t + '"></div>';
+        document.getElementById("flyguard" + t).outerHTML = f
+          ? mixRow(side, GUARD_LABELS, f.guards).replace('<div class="', '<div id="flyguard' + t + '" class="')
+          : '<div id="flyguard' + t + '"></div>';
+      });
+    }
+    leads.forEach(function (f, t) { paintMB(document.getElementById("flymb" + t), f, t); });
+  }
+
   function drawBrains() {
     if (typeof DiscWars.state !== "function") return;
+    var FL = DiscWars.state().flies;
+    if (FL && FB) { drawFlies(FL); return; }
     var L = DiscWars.state().learning;
     if (!L) { brainsBox.hidden = true; return; }      // played blind
     brainsBox.hidden = false;
@@ -542,7 +682,7 @@
   }
 
   setInterval(drawBoard, 250);
-  setInterval(drawBrains, 600);
+  setInterval(drawBrains, FB ? 120 : 600);         // a fly's neurons are worth watching
 
   // ── Sound ─────────────────────────────────────────────────────────────
   // The fight drives a 120 BPM sequencer: a throw is a chromatic run half a
@@ -557,6 +697,7 @@
     DiscWars.on(function (kind, info) {
       // "out" shapes the tempo, "round" both that and the held notes;
       // everything else is a sound.
+      if (kind === "decide" || kind === "dopamine") return;   // the flies', not the kit's
       if (kind === "out") DiscWarsSound.mark(kind);
       else if (kind === "round") { DiscWarsSound.mark(kind); DiscWarsSound.play(kind, info); }
       else DiscWarsSound.play(kind, info);

@@ -202,6 +202,66 @@ A few hundred weights, plain arrays and loops, no library. The readout under
 the arena shows what each side has come to. Without `learn.js` the fight is
 played blind and runs exactly as before.
 
+## A fly's brain in every fighter
+
+With `flybrain.js` loaded, the two side-wide policies above step aside and
+**every fighter thinks with the mushroom body of a real fruit fly** — the
+fly's centre for learning from reward, cut out of the
+[FlyWire](https://flywire.ai) whole-brain connectome (FAFB v783, right
+hemisphere): 344 projection neurons, 2,597 Kenyon cells, 48 output neurons
+and 165 dopamine neurons, joined by the synapses actually counted between
+them. `mbdata.js` holds it; `tools/extract_mb.py` cuts it from the public
+data.
+
+**What is the fly's and what is ours.** A connectome is a wiring diagram, so
+two seams had to be made up, and they are kept as plain as possible:
+
+- *In:* each fact about an exchange — *my disc is home*, *it threw low last
+  time*, *we are a fighter down* — is a smell. It lights a fixed handful of
+  the fly's real glomeruli, picked by hashing the fact, so the same situation
+  always smells the same.
+- *Out:* the 48 output neurons are dealt among the six moves (three aims,
+  three guards) so each move is voiced by a few real neurons with about the
+  same Kenyon-cell input as every other. A move's pull is how hard its
+  neurons are driven.
+
+Between them nothing is invented: projection neurons drive Kenyon cells
+through their real synapses, the APL neuron's feedback leaves only the most
+driven ~5% firing (as in the fly), and those drive the output neurons through
+theirs.
+
+**It learns the way a fly does.** A Kenyon-cell-to-output synapse changes only
+where the Kenyon cell was active, where its compartment got dopamine, and by
+how much — the three-factor rule. How much dopamine each compartment can get
+is read off the real dopamine-neuron wiring. A fresh fly has never had any,
+so every move pulls equally and it **flails**. Then it is paid:
+
+| What happened                                          | Dopamine |
+|--------------------------------------------------------|---------:|
+| A success: a throw past the guard, a guard that covers it, a ring taken | 1 |
+| A knockout or a kill: the opponent out of the round    | 5        |
+| A round won — to every fly on the winning side         | 10       |
+
+A success is scored against what that fly has come to expect, so a move that
+usually works and fails this once is pushed down — a reward prediction error,
+which is what dopamine neurons report. Knockouts and round wins arrive late,
+so they are shared back along a fading trace of what it did on the way, the
+most recent moves getting most.
+
+**Only the champion keeps its fly.** Everyone else rezzes into the next round
+with a new, untrained one, so a long reign is a brain with more and more
+behind it, and the move palette, records and rank work exactly as before.
+The readout follows one fly a side — the champion's where it is — with how
+often it aims and guards each way, and its mushroom body drawn from the real
+soma positions: every Kenyon cell, the ~5% that fired for its last decision
+lit, output neurons sized by how hard they pull, and the dopamine neurons
+that teach the rewarded move flashing white. Against a defender that blocks
+70% of the time a fresh fly is getting 81% past within ~300 throws, against
+the best possible 85%; two flies against each other hover near the honest
+two-in-three.
+
+Without `flybrain.js` (or `mbdata.js`) the fight falls back to `learn.js`.
+
 ## The fight
 
 Nothing here is scripted or on a timeline. The two fighters take turns
@@ -242,7 +302,7 @@ on top of the captured clips rather than captured themselves.
 
 ## Running it
 
-It is three static files and needs no build step, but it does need to be
+It is a handful of static files and needs no build step, but it does need to be
 served rather than opened as a `file://` URL, because the browser will not
 load the two scripts otherwise:
 
@@ -287,6 +347,21 @@ including in products, but not to resell as data. As CMU asks:
 
 > The data used in this project was obtained from mocap.cs.cmu.edu.
 > The database was created with funding from NSF EIA-0196217.
+
+The fighters' brains are the right-hemisphere mushroom body of the **FlyWire**
+whole-brain connectome, FAFB v783, used under CC BY 4.0:
+
+> FlyWire Consortium (2024). FlyWire Whole-brain Connectome Connectivity Data
+> (Version 783.0). Zenodo. https://doi.org/10.5281/zenodo.10676866
+>
+> Dorkenwald et al. (2024), *Neuronal wiring diagram of an adult brain*, Nature.
+> Schlegel et al. (2024), *Whole-brain annotation and multi-connectome cell
+> typing of Drosophila*, Nature.
+
+The connectivity table was taken from Shiu et al. (2024)'s
+[Drosophila_brain_model](https://github.com/philshiu/Drosophila_brain_model)
+(MIT), and the cell types from
+[flywire_annotations](https://github.com/flyconnectome/flywire_annotations).
 
 ## Licence
 

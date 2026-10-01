@@ -432,8 +432,15 @@
              name: "", champion: false, stats: blankStats(),
              // What has worked: pairs of throws that ended with a kill, and
              // the second half of one part-way through being played again.
-             combos: [], plan: null, prevAim: -1, practised: null, spared: false };
+             combos: [], plan: null, prevAim: -1, practised: null, spared: false,
+             // A fruit fly's mushroom body, never yet given dopamine.
+             brain: freshBrain() };
   }
+
+  // flybrain.js gives every fighter a fly of its own; without it the fight
+  // falls back on the two side-wide policies in learn.js, or plays blind.
+  function freshBrain() { return window.FlyBrain ? new window.FlyBrain.Brain() : null; }
+  function flies() { return !!window.FlyBrain; }
 
   // A platform and its four rings. A fighter starts on its own and can end
   // up on a teammate's, so the two are kept apart.
@@ -1176,7 +1183,37 @@
     stun: 0.65          // and it is reeling for less of it afterwards
   };
 
+  // Dopamine, in the three sizes asked for: a success, a knockout or kill,
+  // a round. Everything about how a fly takes it is in flybrain.js.
+  function reward(p, kind) {
+    if (p == null || p < 0 || !fs[p] || !fs[p].brain) return;
+    fs[p].brain.burst(kind);
+    emit("dopamine", { team: fs[p].team, name: fs[p].name, kind: kind });
+  }
+
+  // What a fly smells of an exchange. Facts, not numbers: each one lights
+  // its own few glomeruli. The attacker smells the defender's last answers,
+  // the tell it has to read; the defender smells the attacker's last
+  // throws, the habit it has to read.
+  function attackerSmells(att, def) {
+    var a = fs[att], d = fs[def];
+    return ["foe-disc-" + (discHome(def) ? "home" : "away"),
+            "foe-ring-" + d.ring, "my-ring-" + a.ring,
+            "foe-guarded-" + d.lastGuard, "foe-was-aimed-" + d.lastAim,
+            "my-last-throw-" + a.lastThrowAim,
+            "odds-" + Math.sign(liveCount(a.team) - liveCount(d.team))];
+  }
+  function defenderSmells(att, def) {
+    var a = fs[att], d = fs[def];
+    return ["my-disc-" + (discHome(def) ? "home" : "away"),
+            "my-ring-" + d.ring, "foe-ring-" + a.ring,
+            "foe-threw-" + a.lastThrowAim, "foe-threw-before-" + a.prevAim,
+            "my-last-guard-" + d.lastGuard,
+            "odds-" + Math.sign(liveCount(d.team) - liveCount(a.team))];
+  }
+
   function startBrains() {
+    if (flies()) { brains = null; return; }        // one fly each instead
     brains = (window.DiscWarsLearn)
       ? [new window.DiscWarsLearn.Side(NFEAT, 16), new window.DiscWarsLearn.Side(NFEAT, 16)]
       : null;
@@ -1202,7 +1239,22 @@
   function readThrow(att, def, canBlock) {
     var forced = comboAim(att, def);               // a pair it is trying again
     var d;
-    if (!brains) {
+    if (flies() && fs[att].brain && fs[def].brain) {
+      // Each fly decides for itself, from what it smells of the exchange.
+      var A = fs[att].brain.decide("aim", attackerSmells(att, def), null);
+      var G = fs[def].brain.decide("guard", defenderSmells(att, def), [true, canBlock, true]);
+      // A remembered combination overrides the fly; the fly still made the
+      // move, and learns from how it went as if it had chosen it.
+      if (forced >= 0) fs[att].brain.override(A, forced);
+      d = { aim: A.move, guard: G.move, through: G.move !== A.move };
+      // A success is getting it past the guard, or having the guard that
+      // covers it. Scored straight away, against what each fly expects.
+      fs[att].brain.outcome(A, d.through);
+      fs[def].brain.outcome(G, !d.through);
+      emit("decide", { att: fs[att].name, def: fs[def].name, through: d.through });
+      fs[def].lastAim = d.aim;
+      fs[def].lastGuard = d.guard;
+    } else if (!brains) {
       var aim = forced >= 0 ? forced : Math.floor(Math.random() * 3);
       var guards = canBlock ? [0, 1, 2] : [0, 2];
       var guard = guards[Math.floor(Math.random() * guards.length)];
@@ -1350,6 +1402,7 @@
         }
         breakRing(fs[q].pad, k);
         fs[p].stats.rings++;
+        reward(p, "success");                      // a ring out from under somebody
         emit("ring", { team: fs[q].team });
         var f = fs[q];
         if (((f.mode === "cling" || f.mode === "climb") && k === f.clingRing) ||
@@ -1657,12 +1710,18 @@
     if (by != null && by !== p && fs[by]) {
       fs[by].stats.kills++;
       rememberKill(by);                            // keep how it was done
+      reward(by, "knockout");                      // a knockout or a kill: the bigger dose
     }
     // Called once per fighter per round, so it is what the tempo counts.
     emit("out", { team: fs[p].team, left: liveCount(fs[p].team) });
     if (liveCount(fs[p].team) > 0) return false;   // its side fights on without it
     var winner = 1 - fs[p].team;
     score[winner]++;
+    // The biggest dose of all, to every fly on the side that won it --
+    // standing or not, since a fallen teammate's moves wore the other side
+    // down too. Only the survivors carry it anywhere: the rest are about to
+    // be replaced.
+    for (var w = 0; w < fs.length; w++) if (fs[w].team === winner) reward(w, "round");
     banner = SIDE_NAME[winner] + " WIN";
     // The round is decided here, not when the next one is set up a second
     // and a half later. Anything still sounding belongs to a fight that has
@@ -1697,6 +1756,7 @@
       }
     }
     if (champ >= 0) fs[champ].stats.rounds++;
+    if (champ >= 0 && fs[champ].brain) fs[champ].brain.clearTrace();   // last round is paid for
 
     var taken = champ >= 0 ? [fs[champ].name] : [];
     for (var n = 0; n < fs.length; n++) {
@@ -1705,6 +1765,7 @@
       fs[n].name = freshName(taken);               // a new program on that platform
       fs[n].stats = blankStats();
       fs[n].combos = []; fs[n].plan = null; fs[n].prevAim = -1;
+      fs[n].brain = freshBrain();                  // a new fly: it will flail at first
       fs[n].foe = -1;
       fs[n].lastAim = -1; fs[n].lastGuard = -1;
     }
@@ -1965,6 +2026,16 @@
                      return { name: c.name, used: c.used, trig: c.trig };
                    }) };
         }),
+        // Each fighter's fly, for the readout: what it does, how much it has
+        // been taught, and the neurons behind its last decision.
+        flies: flies() ? fs.map(function (f, i) {
+          var b = f.brain;
+          if (!b) return null;
+          return { name: f.name, team: f.team, alive: alive(i), champion: f.champion,
+                   decisions: b.decisions, dopamine: b.dopamine,
+                   aims: b.mix.aim.slice(), guards: b.mix.guard.slice(),
+                   last: b.last, lastDA: b.lastDA };
+        }) : null,
         // What the two policies have come to, for the readout. Null when
         // learn.js is not loaded and the fight is being played blind.
         learning: brains && brains.map(function (b) {

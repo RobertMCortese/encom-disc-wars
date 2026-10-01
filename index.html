@@ -195,6 +195,66 @@
   .brains .who small { display: block; font-size: 8px; letter-spacing: 0.14em;
                        opacity: 0.6; color: var(--chrome-dim); margin-top: 2px; }
   .brains canvas.mb { width: 84px; height: 64px; display: block; }
+  /* The Hall of Champions: every fighter ever crowned, kept in this browser.
+     Opened from its chip beside the match sizes; pick champions, put each
+     on a side, and start a match with them. */
+  .hall {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(0, 0, 0, 0.55);
+  }
+  .hall[hidden] { display: none; }
+  .hall .panel {
+    width: min(720px, 100%); max-height: min(640px, calc(100vh - 32px));
+    display: flex; flex-direction: column;
+    background: var(--ink); border: 1px solid var(--accent); border-radius: 2px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--chrome);
+  }
+  .hall header, .hall footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--rule);
+  }
+  .hall footer { border-bottom: 0; border-top: 1px solid var(--rule); flex-wrap: wrap; }
+  .hall h2 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.34em; color: var(--accent-hi); }
+  .hall .list { overflow-y: auto; padding: 4px 0; flex: 1; min-height: 80px; }
+  .hall .empty { padding: 28px 16px; color: var(--chrome-dim); line-height: 1.8; text-align: center; }
+  .hall .row {
+    display: grid; align-items: center; gap: 4px 12px; padding: 8px 16px;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    border-bottom: 1px solid var(--rule);
+  }
+  .hall .row:last-child { border-bottom: 0; }
+  .hall .row.on { background: rgba(255, 255, 255, 0.03); }
+  .hall input[type="checkbox"], .hall input[type="radio"] { accent-color: var(--accent); margin: 0; }
+  .hall .who b { font-weight: 700; letter-spacing: 0.26em; }
+  .hall .who b.a { color: var(--side-a); }
+  .hall .who b.b { color: var(--side-b); }
+  .hall .who .rk { color: var(--accent-hi); margin-right: 8px; }
+  .hall .who small {
+    display: block; margin-top: 3px; font-size: 8.5px; letter-spacing: 0.12em;
+    color: var(--chrome-dim); text-transform: uppercase;
+  }
+  .hall .sides { display: flex; gap: 10px; white-space: nowrap; }
+  .hall .sides label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--chrome-dim); }
+  .hall .sides label.a:has(input:checked) { color: var(--side-a); }
+  .hall .sides label.b:has(input:checked) { color: var(--side-b); }
+  .hall .row:not(.on) .sides { opacity: 0.45; }
+  .hall .summary { color: var(--chrome-dim); line-height: 1.6; }
+  .hall .summary b { color: var(--chrome); font-weight: 700; }
+  .hall .summary .warn { color: var(--side-b); }
+  .hall button.go, .hall button.x {
+    background: transparent; cursor: pointer; font: inherit;
+    border: 1px solid var(--rule); border-radius: 2px; color: var(--chrome);
+    padding: 8px 14px; letter-spacing: 0.24em; text-transform: uppercase;
+  }
+  .hall button.go { border-color: var(--accent); color: var(--accent-hi); }
+  .hall button.go:disabled { opacity: 0.35; cursor: default; border-color: var(--rule); }
+  .hall button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 560px) {
+    .hall .row { grid-template-columns: 18px minmax(0, 1fr); }
+    .hall .sides { grid-column: 2; }
+  }
 
   .credit {
     font-size: 9px; letter-spacing: 0.04em; color: var(--chrome-dim);
@@ -301,6 +361,20 @@
     </div>
   </div>
 
+  <div class="hall" id="hall" hidden role="dialog" aria-modal="true" aria-labelledby="hall-title">
+  <div class="panel">
+    <header>
+      <h2 id="hall-title">Hall of Champions</h2>
+      <button type="button" class="x" id="hall-close">Close</button>
+    </header>
+    <div class="list" id="hall-list"></div>
+    <footer>
+      <div class="summary" id="hall-summary"></div>
+      <button type="button" class="go" id="hall-start" disabled>Start Match</button>
+    </footer>
+  </div>
+</div>
+
   <div class="curtain" id="curtain">
     <button class="start" id="start" type="button">Begin the duel</button>
   </div>
@@ -310,10 +384,10 @@
 <script src="vector.js?v=4ec43c23"></script>
 <script src="learn.js?v=d1de0737"></script>
 <script src="mbdata.js?v=60a3e3e7"></script>
-<script src="flybrain.js?v=3995567e"></script>
+<script src="flybrain.js?v=a96d3f61"></script>
 <script src="sound.js?v=af825e47"></script>
 <script src="poses.js?v=573e2db4"></script>
-<script src="discwars.js?v=efd93abb"></script>
+<script src="discwars.js?v=ba59346b"></script>
 <script>
 (function () {
   "use strict";
@@ -450,6 +524,8 @@
     // the silent one: a control that looks live and does nothing at all.
     if (typeof DiscWars.setTeams !== "function") { stale(); return; }
     teams = n;
+    var hc = document.getElementById("size-hall");
+    if (hc) hc.setAttribute("aria-pressed", "false");
     Object.keys(sizeChips).forEach(function (k) {
       sizeChips[k].setAttribute("aria-pressed", String(Number(k) === n));
     });
@@ -480,7 +556,18 @@
     var flags = st.fighters.map(function (f) { return f.alive ? "1" : "0"; }).join("");
     var ch = null;
     for (var i = 0; i < st.fighters.length; i++) if (st.fighters[i].champion) ch = st.fighters[i];
-    var key = st.score.join(":") + "|" + st.banner + "|" + flags +
+    // A match from the Hall has a champion on every seat it filled: name
+    // them all, each with its rank, and leave the move list to the Hall.
+    var hallLine = "";
+    if (st.hall) {
+      ch = null;
+      hallLine = '<div class="champ">' + st.fighters.filter(function (f) { return f.seated; })
+        .map(function (f) {
+          return (f.rank || "CHAMPION") + ' <b class="' + (f.team === 0 ? "a" : "b") + '">' + f.name + "</b>" +
+                 (f.alive ? "" : " \u2715");
+        }).join(" \u00b7 ") + "</div>";
+    }
+    var key = st.score.join(":") + "|" + st.banner + "|" + flags + "|" + hallLine +
               "|" + (ch ? ch.name + ch.points + ch.stats.rounds + (ch.rank || "") +
                           (ch.combos || []).map(function (c) { return c.name + c.used; }).join() : "");
     if (key === boardKey) return;
@@ -518,8 +605,185 @@
                          mark + c.name + (c.used > 1 ? " \u00d7" + c.used : "") + "</b>";
                 }).join("<i>\u00b7</i>") + "</div>"
               : "") : "") +
+      hallLine +
       (st.banner ? '<div class="banner">' + st.banner + "</div>" : "");
   }
+  // ── Hall of Champions ─────────────────────────────────────────────────
+  // Every fighter ever crowned, kept in this browser between visits: its
+  // name, rank, record, named moves and its fly's learned weights. The
+  // fight sends a fresh record after every round a champion is part of and
+  // when it falls; the latest replaces the last. Tick champions to field
+  // them, pick each one's side, and the match size follows from the ticks:
+  // one a side is a duel, three against one is three against one. A side
+  // nobody is picked for is filled with new programs, as many as the other.
+  var HALL_KEY = "discwars.hall.v1";
+  var HALL_MAX = 120;                    // past this the least decorated make room
+  function readHall() {
+    try {
+      var h = JSON.parse(localStorage.getItem(HALL_KEY) || "[]");
+      return Array.isArray(h) ? h.filter(function (r) { return r && r.id && r.name; }) : [];
+    } catch (e) { return []; }
+  }
+  function rankOrder(a, b) {
+    return (b.rounds - a.rounds) || (b.points - a.points) || ((b.stats || {}).kills - (a.stats || {}).kills) ||
+           (a.crowned - b.crowned);
+  }
+  function writeHall(list) {
+    list.sort(rankOrder);
+    // Too big for the browser's allowance: let go of the least decorated
+    // until it fits, rather than losing the lot.
+    while (list.length) {
+      try { localStorage.setItem(HALL_KEY, JSON.stringify(list.slice(0, HALL_MAX))); return true; }
+      catch (e) { if (list.length <= 1) return false; list.pop(); }
+    }
+    return false;
+  }
+  function enshrine(rec) {
+    var list = readHall(), found = false;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === rec.id) { list[i] = rec; found = true; break; }
+    }
+    if (!found) list.push(rec);
+    writeHall(list);
+    if (!hallBox.hidden) drawHall();
+    hallChip.textContent = "Hall · " + Math.min(list.length, HALL_MAX);
+  }
+
+  var hallBox = document.getElementById("hall");
+  var hallList = document.getElementById("hall-list");
+  var hallSummary = document.getElementById("hall-summary");
+  var hallStart = document.getElementById("hall-start");
+  var picked = {};                       // id -> side (0 programs, 1 sentinels); absent = not ticked
+  var sideFor = {};                      // id -> side chosen, kept while unticked
+
+  var hallChip = document.createElement("button");
+  hallChip.type = "button";
+  hallChip.className = "size hallchip";
+  hallChip.id = "size-hall";
+  hallChip.setAttribute("aria-pressed", "false");
+  hallChip.setAttribute("aria-haspopup", "dialog");
+  hallChip.textContent = "Hall · " + readHall().length;
+  hallChip.addEventListener("click", openHall);
+  sizeBox.appendChild(hallChip);
+
+  function esc(t) {
+    return String(t).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function openHall() {
+    hallBox.hidden = false;
+    drawHall();
+    var first = hallBox.querySelector("input, button.go:not(:disabled), button.x");
+    if (first) first.focus();
+  }
+  function closeHall() {
+    hallBox.hidden = true;
+    hallChip.focus();
+  }
+  document.getElementById("hall-close").addEventListener("click", closeHall);
+  hallBox.addEventListener("click", function (e) { if (e.target === hallBox) closeHall(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !hallBox.hidden) closeHall();
+  });
+
+  function drawHall() {
+    var list = readHall().sort(rankOrder);
+    var ids = {};
+    list.forEach(function (r) { ids[r.id] = true; });
+    Object.keys(picked).forEach(function (id) { if (!ids[id]) delete picked[id]; });
+    var live = {};
+    if (typeof DiscWars.state === "function") {
+      DiscWars.state().fighters.forEach(function (f) { if (f.champion && f.alive && f.id) live[f.id] = true; });
+    }
+    if (!list.length) {
+      hallList.innerHTML = '<div class="empty">No champions yet.<br>A fighter is crowned when it wins a round ' +
+        "and every champion is kept here, in this browser.</div>";
+    } else {
+      hallList.innerHTML = list.map(function (r) {
+        var on = r.id in picked;
+        var side = on ? picked[r.id] : (r.id in sideFor ? sideFor[r.id] : (r.team === 1 ? 1 : 0));
+        var st = r.stats || {};
+        var moves = (r.combos || []).length;
+        var fly = r.brain ? " · FLY " + (r.brain.decisions || 0) + " MOVES" : "";
+        var id = esc(r.id);
+        return '<div class="row' + (on ? " on" : "") + '" data-id="' + id + '">' +
+          '<input type="checkbox" aria-label="Field ' + esc(r.name) + '"' + (on ? " checked" : "") + ">" +
+          '<div class="who"><span class="rk">' + esc(r.rank || "CHAMPION") + "</span>" +
+            '<b class="' + (side === 0 ? "a" : "b") + '">' + esc(r.name) + "</b>" +
+            (live[r.id] ? " · REIGNING" : "") +
+            "<small>" + (r.rounds | 0) + ((r.rounds | 0) === 1 ? " ROUND HELD" : " ROUNDS HELD") +
+            " · " + (st.kills | 0) + ((st.kills | 0) === 1 ? " KILL" : " KILLS") +
+            " · " + (r.points | 0) + " PTS · " + moves + (moves === 1 ? " NAMED MOVE" : " NAMED MOVES") +
+            fly + "</small></div>" +
+          '<div class="sides" role="radiogroup" aria-label="Side for ' + esc(r.name) + '">' +
+            '<label class="a"><input type="radio" name="side-' + id + '" value="0"' +
+              (side === 0 ? " checked" : "") + "> Programs</label>" +
+            '<label class="b"><input type="radio" name="side-' + id + '" value="1"' +
+              (side === 1 ? " checked" : "") + "> Sentinels</label>" +
+          "</div></div>";
+      }).join("");
+    }
+    summarize();
+  }
+
+  hallList.addEventListener("change", function (e) {
+    var row = e.target.closest(".row");
+    if (!row) return;
+    var id = row.getAttribute("data-id");
+    var radio = row.querySelector('input[type="radio"]:checked');
+    var side = radio ? Number(radio.value) : 0;
+    sideFor[id] = side;
+    if (e.target.type === "checkbox") {
+      if (e.target.checked) picked[id] = side; else delete picked[id];
+    } else if (id in picked) {
+      picked[id] = side;
+    }
+    row.classList.toggle("on", id in picked);
+    var name = row.querySelector(".who b");
+    name.className = side === 0 ? "a" : "b";
+    summarize();
+  });
+
+  function counts() {
+    var c = [0, 0];
+    Object.keys(picked).forEach(function (id) { c[picked[id]]++; });
+    return c;
+  }
+  function summarize() {
+    var c = counts(), total = c[0] + c[1];
+    var ok = total > 0 && c[0] <= 3 && c[1] <= 3;
+    var a = c[0] || c[1], b = c[1] || c[0];
+    var msg;
+    if (!total) msg = "Tick champions to field them. The match size follows from how many.";
+    else if (!ok) msg = '<span class="warn">At most three a side</span> — programs ' + c[0] + ", sentinels " + c[1] + ".";
+    else {
+      msg = "<b>" + a + "v" + b + "</b> · programs " + c[0] + " · sentinels " + c[1];
+      if (!c[0] || !c[1]) msg += " — new programs fill the other side";
+    }
+    hallSummary.innerHTML = msg;
+    hallStart.disabled = !ok;
+  }
+
+  hallStart.addEventListener("click", function () {
+    if (typeof DiscWars.startHall !== "function") { stale(); return; }
+    var byId = {};
+    readHall().forEach(function (r) { byId[r.id] = r; });
+    var roster = [[], []];
+    readHall().sort(rankOrder).forEach(function (r) {
+      if (r.id in picked) roster[picked[r.id]].push(byId[r.id]);
+    });
+    if (!DiscWars.startHall(roster)) return;
+    Object.keys(sizeChips).forEach(function (k) { sizeChips[k].setAttribute("aria-pressed", "false"); });
+    hallChip.setAttribute("aria-pressed", "true");
+    boardKey = null; brainsKey = null; flyKey = null;
+    drawBoard(); drawBrains();
+    closeHall();
+  });
+
+  DiscWars.on(function (kind, info) { if (kind === "record") enshrine(info); });
+
   // ── What the sides have learned ───────────────────────────────────────
   var brainsBox = document.getElementById("brains");
   var brainsKey = null;
@@ -700,7 +964,7 @@
     DiscWars.on(function (kind, info) {
       // "out" shapes the tempo, "round" both that and the held notes;
       // everything else is a sound.
-      if (kind === "decide" || kind === "dopamine" || kind === "absorb") return;   // the flies', not the kit's
+      if (kind === "decide" || kind === "dopamine" || kind === "absorb" || kind === "record") return;   // the flies', not the kit's
       if (kind === "out") DiscWarsSound.mark(kind);
       else if (kind === "round") { DiscWarsSound.mark(kind); DiscWarsSound.play(kind, info); }
       else DiscWarsSound.play(kind, info);

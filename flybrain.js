@@ -344,8 +344,39 @@
     return this;
   };
 
+  // ── Keeping a fly ─────────────────────────────────────────────────────
+  // Only what it learned needs keeping: the wiring is the same in every
+  // fly. The learned weights go down as one signed byte each (steps of
+  // CAP/127, finer than a single success moves them), base64 -- about 17 KB.
+  Brain.prototype.save = function () {
+    var q = new Int8Array(nSyn);
+    for (var e = 0; e < nSyn; e++) q[e] = Math.max(-127, Math.min(127, Math.round(this.p[e] / CAP * 127)));
+    var bin = "", u = new Uint8Array(q.buffer);
+    for (var i = 0; i < u.length; i++) bin += String.fromCharCode(u[i]);
+    return { v: 1, n: nSyn, p: btoa(bin), base: this.base, mix: this.mix,
+             decisions: this.decisions, dopamine: this.dopamine, teacher: this.teacher };
+  };
+  function load(o) {
+    var b = new Brain();
+    if (!o || o.v !== 1 || o.n !== nSyn || typeof o.p !== "string") return b;   // a different fly: start over
+    try {
+      var bin = atob(o.p);
+      for (var e = 0; e < nSyn && e < bin.length; e++) {
+        var c = bin.charCodeAt(e);
+        b.p[e] = (c > 127 ? c - 256 : c) / 127 * CAP;
+      }
+    } catch (err) { return new Brain(); }
+    if (o.base) b.base = { aim: +o.base.aim || 0.5, guard: +o.base.guard || 0.5 };
+    if (o.mix && o.mix.aim && o.mix.guard) b.mix = { aim: o.mix.aim.slice(0, 3), guard: o.mix.guard.slice(0, 3) };
+    b.decisions = o.decisions | 0;
+    b.dopamine = +o.dopamine || 0;
+    b.teacher = o.teacher || null;
+    return b;
+  }
+
   window.FlyBrain = {
     Brain: Brain,
+    load: load,
     REWARD: REWARD,
     channels: channels,
     chanOf: chanOf,

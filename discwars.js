@@ -65,6 +65,13 @@
   // 1v1, 2v2 or 3v3. The arena, the camera and the number of duels running at
   // once all follow from this.
   var teamSize = 1;
+  // How many stand on each side. Equal in an ordinary match; a match set up
+  // from the Hall of Champions can be lopsided -- one against three, say.
+  var sideSize = [1, 1];
+  // A match from the Hall: the champions picked for it keep their seats for
+  // every round of it, and nobody new is crowned.
+  var hall = false;
+  var lastWinner = -1;
   var arenaZ = 5.5;                  // the glass wall, far enough back to clear the rings
   // Rings per fighter: the platform, then four rings; [inner, outer] radii.
   var ringRadii = [[0, 0.5], [0.56, 0.96], [1.02, 1.42], [1.48, 1.88], [1.94, 2.34]];
@@ -450,23 +457,39 @@
 
   // Lay out a match: two ranks of `n` facing each other across the arena,
   // each fighter on its own platform with its own four rings.
-  function buildMatch(n) {
-    teamSize = Math.max(1, Math.min(3, n | 0));
+  // `roster`, when given, is [programs, sentinels]: saved champions to seat
+  // on each side. A side left empty is filled with new programs, as many as
+  // the other side has champions.
+  function buildMatch(n, roster) {
+    var clamp = function (k) { return Math.max(1, Math.min(3, k | 0)); };
+    hall = !!roster;
+    lastWinner = -1;
+    if (roster) {
+      var a = roster[0].length, b = roster[1].length;
+      sideSize = [clamp(a || b), clamp(b || a)];
+    } else {
+      sideSize = [clamp(n), clamp(n)];
+    }
+    teamSize = Math.max(sideSize[0], sideSize[1]);
     arenaZ = Math.max(5.5, rankGap * (teamSize - 1) / 2 + 3.2);
     pads = []; fs = []; ds = []; ringCircles = [];
     for (var team = 0; team < 2; team++) {
-      for (var i = 0; i < teamSize; i++) {
+      for (var i = 0; i < sideSize[team]; i++) {
         pads.push({ team: team, rank: i,
                     cx: team === 0 ? -centreX : centreX,
-                    cz: (i - (teamSize - 1) / 2) * rankGap,
+                    cz: (i - (sideSize[team] - 1) / 2) * rankGap,
                     rings: ringRadii.map(function () { return { s: "up" }; }) });
       }
     }
-    // One fighter per platform to begin with, in the same order.
+    // One fighter per platform to begin with, in the same order. Seated
+    // champions' names are spoken for first.
     var taken = [];
+    if (roster) roster.forEach(function (side) { side.forEach(function (r) { taken.push(r.name); }); });
     pads.forEach(function (pd, i) {
       var f = newFighter(pd.team, i, [pd.team === 0 ? 1 : -1, 0]);
-      f.name = freshName(taken);
+      var rec = roster && roster[pd.team][pd.rank];
+      if (rec) seat(f, rec);
+      else f.name = freshName(taken);
       fs.push(f);
       ds.push({ state: "back", pos: [0, 0, 0], trail: [], flight: null });
     });
@@ -480,6 +503,40 @@
     sparkData = [null, null, null, null];
     rebuildLines();
   }
+
+  // A champion out of the Hall, back on a platform: its name, its record,
+  // its named moves and its fly, exactly as they were kept.
+  function seat(f, rec) {
+    f.cid = rec.id;
+    f.crowned = rec.crowned || Date.now();
+    f.seated = true;
+    f.champion = true;
+    f.name = rec.name;
+    var st = blankStats();
+    Object.keys(st).forEach(function (k) { if (rec.stats && rec.stats[k] != null) st[k] = rec.stats[k] | 0; });
+    f.stats = st;
+    f.combos = (rec.combos || []).map(function (c) {
+      return { trig: c.trig, from: c.from, b: c.b, used: c.used | 0 || 1, name: c.name };
+    });
+    if (flies()) f.brain = window.FlyBrain.load(rec.brain);
+  }
+
+  // What the Hall keeps of a champion. Sent out after every round it is
+  // part of, and when it falls, so the Hall always has its latest.
+  function record(i) {
+    var f = fs[i];
+    if (!f || !f.champion) return null;
+    if (!f.cid) { f.cid = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+    if (!f.crowned) f.crowned = Date.now();
+    return { id: f.cid, name: f.name, team: f.team, crowned: f.crowned, updated: Date.now(),
+             rounds: f.stats.rounds, rank: (rankOf(f.stats.rounds) || {}).name || null,
+             points: tally(f), stats: JSON.parse(JSON.stringify(f.stats)),
+             combos: f.combos.map(function (c) {
+               return { trig: c.trig, from: c.from, b: c.b, used: c.used, name: c.name };
+             }),
+             brain: f.brain ? f.brain.save() : null };
+  }
+  function keep(i) { var r = record(i); if (r) emit("record", r); }
 
   function alive(p) {
     var m = fs[p].mode;
@@ -1738,10 +1795,12 @@
       rememberKill(by);                            // keep how it was done
       reward(by, "knockout");                      // a knockout or a kill: the bigger dose
     }
+    if (fs[p].champion) keep(p);                   // its record as it fell
     // Called once per fighter per round, so it is what the tempo counts.
     emit("out", { team: fs[p].team, left: liveCount(fs[p].team) });
     if (liveCount(fs[p].team) > 0) return false;   // its side fights on without it
     var winner = 1 - fs[p].team;
+    lastWinner = winner;
     score[winner]++;
     // The biggest dose of all, to every fly on the side that won it --
     // standing or not, since a fallen teammate's moves wore the other side
@@ -1757,6 +1816,30 @@
     return true;
   }
 
+  // A round of a match from the Hall. The champions picked for it keep their
+  // seats for every round, fallen or not; a round won while still standing
+  // counts toward a champion's rank, as it does anywhere. Anyone not from
+  // the Hall -- the new programs filling a side nobody was picked for -- is
+  // replaced with a new program and a new fly, as a losing side is.
+  function hallRound() {
+    var taken = [];
+    fs.forEach(function (f) { if (f.seated) taken.push(f.name); });
+    for (var n = 0; n < fs.length; n++) {
+      var f = fs[n];
+      if (f.seated) {
+        if (f.team === lastWinner && alive(n)) f.stats.rounds++;
+        if (f.brain) f.brain.clearTrace();
+        keep(n);
+        continue;
+      }
+      f.name = freshName(taken);
+      f.stats = blankStats();
+      f.combos = []; f.plan = null; f.prevAim = -1;
+      f.brain = freshBrain();
+      f.foe = -1; f.lastAim = -1; f.lastGuard = -1;
+    }
+  }
+
   // Everyone back on their platform, every ring up, and the next round on.
   function newRound() {
     emit("round", {});                             // everything back to the top
@@ -1770,57 +1853,62 @@
     // new name and nothing to their name yet, so a champion is the only
     // thing in the arena that accumulates -- and the only one with anything
     // to lose.
-    var champ = -1, best = -1;
-    for (var h = 0; h < fs.length; h++) {
-      if (fs[h].champion && alive(h)) { champ = h; break; }   // still standing: still champion
-    }
-    if (champ < 0) {
-      for (var c = 0; c < fs.length; c++) {
-        if (!alive(c)) continue;
-        var pts = tally(fs[c]);
-        if (pts > best) { best = pts; champ = c; }
+    if (hall) hallRound();
+    else {
+      var champ = -1, best = -1;
+      for (var h = 0; h < fs.length; h++) {
+        if (fs[h].champion && alive(h)) { champ = h; break; }   // still standing: still champion
       }
-    }
-    if (champ >= 0) fs[champ].stats.rounds++;
+      if (champ < 0) {
+        for (var c = 0; c < fs.length; c++) {
+          if (!alive(c)) continue;
+          var pts = tally(fs[c]);
+          if (pts > best) { best = pts; champ = c; }
+        }
+      }
+      if (champ >= 0) fs[champ].stats.rounds++;
 
-    // The champion stood on the winning side -- nobody else is left standing
-    // -- and before its teammates are replaced it takes in what they learned
-    // winning: their flies' weights, and the moves they named.
-    var mates = [];
-    if (champ >= 0) {
-      for (var m = 0; m < fs.length; m++)
-        if (m !== champ && fs[m].team === fs[champ].team) mates.push(m);
-      if (fs[champ].brain)
-        fs[champ].brain.absorb(mates.map(function (k) { return fs[k].brain; }));
-      mates.forEach(function (k) {
-        fs[k].combos.forEach(function (cb) { learnPairFrom(fs[champ], cb); });
-      });
-      fs[champ].taught = mates.length;
-      if (mates.length) emit("absorb", { team: fs[champ].team, name: fs[champ].name, from: mates.length });
-    }
-    if (champ >= 0 && fs[champ].brain) fs[champ].brain.clearTrace();   // last round is paid for
-
-    var taken = champ >= 0 ? [fs[champ].name] : [];
-    for (var n = 0; n < fs.length; n++) {
-      fs[n].champion = (n === champ);
-      if (n === champ) continue;
-      fs[n].name = freshName(taken);               // a new program on that platform
-      fs[n].stats = blankStats();
-      fs[n].combos = []; fs[n].plan = null; fs[n].prevAim = -1;
-      // The champion's side starts the round knowing what the champion
-      // knows: a copy of its fly, and its moves. The side that lost starts
-      // from nothing -- new flies that will flail at first.
-      if (champ >= 0 && fs[n].team === fs[champ].team && fs[champ].brain && flies()) {
-        fs[n].brain = freshBrain().taughtBy(fs[champ].brain, fs[champ].name);
-        fs[n].combos = fs[champ].combos.map(function (cb) {
-          return { trig: cb.trig, from: cb.from, b: cb.b, used: cb.used, name: cb.name,
-                   inherited: cb.used };
+      // The champion stood on the winning side -- nobody else is left standing
+      // -- and before its teammates are replaced it takes in what they learned
+      // winning: their flies' weights, and the moves they named.
+      var mates = [];
+      if (champ >= 0) {
+        for (var m = 0; m < fs.length; m++)
+          if (m !== champ && fs[m].team === fs[champ].team) mates.push(m);
+        if (fs[champ].brain)
+          fs[champ].brain.absorb(mates.map(function (k) { return fs[k].brain; }));
+        mates.forEach(function (k) {
+          fs[k].combos.forEach(function (cb) { learnPairFrom(fs[champ], cb); });
         });
-      } else {
-        fs[n].brain = freshBrain();
+        fs[champ].taught = mates.length;
+        if (mates.length) emit("absorb", { team: fs[champ].team, name: fs[champ].name, from: mates.length });
       }
-      fs[n].foe = -1;
-      fs[n].lastAim = -1; fs[n].lastGuard = -1;
+      if (champ >= 0 && fs[champ].brain) fs[champ].brain.clearTrace();   // last round is paid for
+
+      var taken = champ >= 0 ? [fs[champ].name] : [];
+      for (var n = 0; n < fs.length; n++) {
+        fs[n].champion = (n === champ);
+        if (n === champ) continue;
+        fs[n].name = freshName(taken);               // a new program on that platform
+        fs[n].cid = null; fs[n].crowned = null;
+        fs[n].stats = blankStats();
+        fs[n].combos = []; fs[n].plan = null; fs[n].prevAim = -1;
+        // The champion's side starts the round knowing what the champion
+        // knows: a copy of its fly, and its moves. The side that lost starts
+        // from nothing -- new flies that will flail at first.
+        if (champ >= 0 && fs[n].team === fs[champ].team && fs[champ].brain && flies()) {
+          fs[n].brain = freshBrain().taughtBy(fs[champ].brain, fs[champ].name);
+          fs[n].combos = fs[champ].combos.map(function (cb) {
+            return { trig: cb.trig, from: cb.from, b: cb.b, used: cb.used, name: cb.name,
+                     inherited: cb.used };
+          });
+        } else {
+          fs[n].brain = freshBrain();
+        }
+        fs[n].foe = -1;
+        fs[n].lastAim = -1; fs[n].lastGuard = -1;
+      }
+      if (champ >= 0) keep(champ);                 // the Hall has its latest
     }
 
     for (var g = 0; g < pads.length; g++) restoreRings(g);
@@ -2062,18 +2150,31 @@
       for (var i = 0; i < teamSize; i++) after(0.8 + i * 0.35, startChain);
     },
     get teams() { return teamSize; },
+    // A match out of the Hall of Champions: [programs, sentinels], each a
+    // list of up to three saved champion records. Restarts the fight.
+    startHall: function (roster) {
+      if (!roster || roster.length !== 2) return false;
+      var a = (roster[0] || []).slice(0, 3), b = (roster[1] || []).slice(0, 3);
+      if (!a.length && !b.length) return false;
+      buildMatch(0, [a, b]);
+      for (var i = 0; i < teamSize; i++) after(0.8 + i * 0.35, startChain);
+      return true;
+    },
     // What the scoreboard needs: the scoreline, who is still standing, and
     // the word on a round just won. Read, never held on to -- the fighters
     // are rebuilt whenever the match size changes.
     state: function () {
       return {
         teams: teamSize,
+        sizes: sideSize.slice(),
+        hall: hall,
         score: score.slice(),
         banner: banner,
         sides: SIDE_NAME.slice(),
         fighters: fs.map(function (f, i) {
           return { team: f.team, alive: alive(i), name: f.name,
-                   champion: f.champion, points: tally(f), stats: f.stats,
+                   champion: f.champion, seated: !!f.seated, id: f.cid || null,
+                   points: tally(f), stats: f.stats,
                    rank: f.champion ? (rankOf(f.stats.rounds) || {}).name : null,
                    combos: f.combos.map(function (c) {
                      return { name: c.name, used: c.used, trig: c.trig };

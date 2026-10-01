@@ -35,6 +35,31 @@ attrition — three a side worn down to one, and now and then a clean sweep.
 
 Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
+## The Hall of Champions
+
+Every fighter ever crowned is kept in the **Hall**, in this browser, so the
+stable is still there after you close the tab and come back. A champion's
+entry is its name, rank, record, named moves and its fly's learned weights
+(about 17 KB), and it is brought up to date after every round it is part of
+and the moment it falls. The **Hall** chip beside the match sizes shows how
+many there are and opens the list, most decorated first.
+
+Tick a champion to field it and choose its side with the radio buttons;
+**Start Match** sets the match up from the ticks, up to three a side. One a
+side is a duel, two against two a team match, and it can be lopsided: one
+against three, two against three, one against two. A side nobody was picked
+for is filled with new programs, as many as the other side has champions.
+
+In a Hall match every champion picked keeps its seat for every round,
+fallen or not, rezzing with its fly and moves as they now stand; a round won
+while still standing counts toward its rank, as anywhere, and is saved back
+to the Hall. New programs filling an empty side are replaced each round with
+new flies, and nobody new is crowned. Picking 1v1, 2v2 or 3v3 goes back to
+ordinary matches.
+
+The Hall keeps the 120 most decorated; past that, or past what the browser
+will store, the least decorated make room.
+
 ## The fight plays itself
 
 Turn Sound on and the arena becomes a sequencer. A four-on-the-floor kick

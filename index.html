@@ -310,10 +310,10 @@
 <script src="vector.js?v=4ec43c23"></script>
 <script src="learn.js?v=d1de0737"></script>
 <script src="mbdata.js?v=60a3e3e7"></script>
-<script src="flybrain.js?v=279b537e"></script>
+<script src="flybrain.js?v=3995567e"></script>
 <script src="sound.js?v=af825e47"></script>
 <script src="poses.js?v=573e2db4"></script>
-<script src="discwars.js?v=61d8620b"></script>
+<script src="discwars.js?v=efd93abb"></script>
 <script>
 (function () {
   "use strict";
@@ -636,7 +636,7 @@
     brainsBox.hidden = false;
     var leads = [leadFly(flies, 0), leadFly(flies, 1)];
     var key = leads.map(function (f) {
-      return f ? f.name + f.champion + f.decisions + Math.round(f.dopamine) +
+      return f ? f.name + f.champion + (f.teacher || "") + f.absorbed + f.decisions + Math.round(f.dopamine) +
                  f.aims.concat(f.guards).map(function (v) { return v.toFixed(2); }).join() : "-";
     }).join("|");
     if (key !== flyKey) {
@@ -646,7 +646,10 @@
         document.getElementById("flywho" + t).innerHTML = f
           ? (f.champion ? "★ " : "") + f.name +
             "<small>" + f.decisions + (f.decisions === 1 ? " MOVE" : " MOVES") +
-            " · " + Math.round(f.dopamine) + " DA</small>"
+            " · " + Math.round(f.dopamine) + " DA" +
+            (f.teacher ? " · TAUGHT BY " + f.teacher : "") +
+            (f.absorbed ? " · HOLDS " + f.absorbed + (f.absorbed === 1 ? " MATE" : " MATES") : "") +
+            "</small>"
           : "";
         document.getElementById("flyaim" + t).outerHTML = f
           ? mixRow(side, AIM_LABELS, f.aims).replace('<div class="', '<div id="flyaim' + t + '" class="')
@@ -697,7 +700,7 @@
     DiscWars.on(function (kind, info) {
       // "out" shapes the tempo, "round" both that and the held notes;
       // everything else is a sound.
-      if (kind === "decide" || kind === "dopamine") return;   // the flies', not the kit's
+      if (kind === "decide" || kind === "dopamine" || kind === "absorb") return;   // the flies', not the kit's
       if (kind === "out") DiscWarsSound.mark(kind);
       else if (kind === "round") { DiscWarsSound.mark(kind); DiscWarsSound.play(kind, info); }
       else DiscWarsSound.play(kind, info);

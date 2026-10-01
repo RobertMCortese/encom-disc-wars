@@ -1115,6 +1115,32 @@
     }
   }
 
+  // A move learned by somebody else, taken into f's palette: counted in if
+  // f already knows it, added under its own name if not, and the palette
+  // trimmed back to the moves used most.
+  function learnPairFrom(f, cb) {
+    // A move it was handed by this same champion only brings back the uses
+    // made of it since; the rest the champion already counted.
+    var fresh = cb.used - (cb.inherited || 0);
+    for (var i = 0; i < f.combos.length; i++) {
+      var c = f.combos[i];
+      if (c.trig === cb.trig && c.from === cb.from && c.b === cb.b) {
+        if (fresh > 0) c.used += fresh;
+        return;
+      }
+    }
+    if (fresh <= 0) return;
+    var clash = f.combos.some(function (c) { return c.name === cb.name; });
+    f.combos.push({ trig: cb.trig, from: cb.from, b: cb.b, used: fresh,
+                    name: clash ? comboName(f.combos) : cb.name });
+    while (f.combos.length > COMBO_MAX) {
+      var worst = 0;
+      for (var k = 1; k < f.combos.length; k++)
+        if (f.combos[k].used < f.combos[worst].used) worst = k;
+      f.combos.splice(worst, 1);
+    }
+  }
+
   function rememberKill(p) {
     var f = fs[p];
     learnPair(f, "guard", f.lastGuard, f.lastThrowAim);   // what it answered, then took
@@ -1756,6 +1782,22 @@
       }
     }
     if (champ >= 0) fs[champ].stats.rounds++;
+
+    // The champion stood on the winning side -- nobody else is left standing
+    // -- and before its teammates are replaced it takes in what they learned
+    // winning: their flies' weights, and the moves they named.
+    var mates = [];
+    if (champ >= 0) {
+      for (var m = 0; m < fs.length; m++)
+        if (m !== champ && fs[m].team === fs[champ].team) mates.push(m);
+      if (fs[champ].brain)
+        fs[champ].brain.absorb(mates.map(function (k) { return fs[k].brain; }));
+      mates.forEach(function (k) {
+        fs[k].combos.forEach(function (cb) { learnPairFrom(fs[champ], cb); });
+      });
+      fs[champ].taught = mates.length;
+      if (mates.length) emit("absorb", { team: fs[champ].team, name: fs[champ].name, from: mates.length });
+    }
     if (champ >= 0 && fs[champ].brain) fs[champ].brain.clearTrace();   // last round is paid for
 
     var taken = champ >= 0 ? [fs[champ].name] : [];
@@ -1765,7 +1807,18 @@
       fs[n].name = freshName(taken);               // a new program on that platform
       fs[n].stats = blankStats();
       fs[n].combos = []; fs[n].plan = null; fs[n].prevAim = -1;
-      fs[n].brain = freshBrain();                  // a new fly: it will flail at first
+      // The champion's side starts the round knowing what the champion
+      // knows: a copy of its fly, and its moves. The side that lost starts
+      // from nothing -- new flies that will flail at first.
+      if (champ >= 0 && fs[n].team === fs[champ].team && fs[champ].brain && flies()) {
+        fs[n].brain = freshBrain().taughtBy(fs[champ].brain, fs[champ].name);
+        fs[n].combos = fs[champ].combos.map(function (cb) {
+          return { trig: cb.trig, from: cb.from, b: cb.b, used: cb.used, name: cb.name,
+                   inherited: cb.used };
+        });
+      } else {
+        fs[n].brain = freshBrain();
+      }
       fs[n].foe = -1;
       fs[n].lastAim = -1; fs[n].lastGuard = -1;
     }
@@ -2033,6 +2086,7 @@
           if (!b) return null;
           return { name: f.name, team: f.team, alive: alive(i), champion: f.champion,
                    decisions: b.decisions, dopamine: b.dopamine,
+                   teacher: b.teacher, absorbed: f.champion ? (f.taught || 0) : 0,
                    aims: b.mix.aim.slice(), guards: b.mix.guard.slice(),
                    last: b.last, lastDA: b.lastDA };
         }) : null,

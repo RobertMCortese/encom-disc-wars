@@ -195,7 +195,8 @@
     this.dopamine = 0;                             // all it has ever been given
     this.last = null;                              // for the readout
     this.lastDA = null;
-    this.mix = { aim: [1 / 3, 1 / 3, 1 / 3], guard: [1 / 3, 1 / 3, 1 / 3] };
+    this.teacher = null;                           // the champion it learned from, if any
+    this.mix ={ aim: [1 / 3, 1 / 3, 1 / 3], guard: [1 / 3, 1 / 3, 1 / 3] };
   }
 
   // How hard each MBON is driven by the KCs this smell lights.
@@ -309,6 +310,39 @@
 
   // A round is over: what it was doing then has been paid for.
   Brain.prototype.clearTrace = function () { this.trace = []; };
+
+  // A champion takes in what its winning teammates learned. Their learned
+  // weights are added to its own, half-strength, so where they agree with
+  // it the habit deepens and where they disagree it cancels out -- a lesson
+  // the whole side learned counts for more than one fly's fluke. Only what
+  // was learned moves across; the wiring is the same in every fly anyway.
+  Brain.prototype.absorb = function (others) {
+    var self = this;
+    others.forEach(function (o) {
+      if (!o || o === self) return;
+      // Only what it learned for itself: a fly that started as a copy of
+      // this champion would otherwise hand the champion back its own
+      // lessons, and every round would double them.
+      var from = o.origin;
+      for (var e = 0; e < nSyn; e++) {
+        var v = self.p[e] + 0.5 * (from ? o.p[e] - from[e] : o.p[e]);
+        self.p[e] = v > CAP ? CAP : v < -CAP ? -CAP : v;
+      }
+      self.dopamine += o.dopamine;
+      Object.keys(self.base).forEach(function (g) { self.base[g] = (self.base[g] + o.base[g]) / 2; });
+    });
+  };
+
+  // A new fly that starts out knowing what its champion knows: the learned
+  // weights and expectations, not the champion's history.
+  Brain.prototype.taughtBy = function (mentor, name) {
+    this.p.set(mentor.p);
+    this.origin = new Float32Array(mentor.p);      // what it was given, kept apart from what it learns
+    this.base = { aim: mentor.base.aim, guard: mentor.base.guard };
+    this.mix = { aim: mentor.mix.aim.slice(), guard: mentor.mix.guard.slice() };
+    this.teacher = name || null;
+    return this;
+  };
 
   window.FlyBrain = {
     Brain: Brain,

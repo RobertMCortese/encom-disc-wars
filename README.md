@@ -248,9 +248,17 @@ which is what dopamine neurons report. Knockouts and round wins arrive late,
 so they are shared back along a fading trace of what it did on the way, the
 most recent moves getting most.
 
-**Only the champion keeps its fly.** Everyone else rezzes into the next round
-with a new, untrained one, so a long reign is a brain with more and more
-behind it, and the move palette, records and rank work exactly as before.
+**The champion carries its side's lessons.** The champion is always on the
+side that won — nobody else is left standing — and before its teammates are
+replaced it **absorbs what they learned winning**: their flies' learned
+weights are added to its own at half strength (where they agree the habit
+deepens, where they disagree it cancels), and their named moves join its
+palette. Then, **the next round, it hands all of it back down**: the new
+programs on its side start with a copy of the champion's fly and its moves,
+shown as *taught by* the champion. Only what a teammate learned for itself
+goes back up, so a lesson is never counted twice. The side that lost starts
+over with new, untrained flies that flail. Records and rank work exactly as
+before.
 The readout follows one fly a side — the champion's where it is — with how
 often it aims and guards each way, and its mushroom body drawn from the real
 soma positions: every Kenyon cell, the ~5% that fired for its last decision

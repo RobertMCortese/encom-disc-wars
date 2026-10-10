@@ -231,6 +231,9 @@
   .hall .who b.a { color: var(--side-a); }
   .hall .who b.b { color: var(--side-b); }
   .hall .who .rk { color: var(--accent-hi); margin-right: 8px; }
+  /* A name is spelled the way it was given. Every pool name is capitals
+     already; the few that are not are meant to be seen as they are. */
+  .nm { text-transform: none; }
   .hall .who small {
     display: block; margin-top: 3px; font-size: 8.5px; letter-spacing: 0.12em;
     color: var(--chrome-dim); text-transform: uppercase;
@@ -381,13 +384,13 @@
 </div>
 
 <script src="palette.js?v=e46f3c02"></script>
-<script src="vector.js?v=4ec43c23"></script>
+<script src="vector.js?v=20da7256"></script>
 <script src="learn.js?v=d1de0737"></script>
 <script src="mbdata.js?v=60a3e3e7"></script>
 <script src="flybrain.js?v=a96d3f61"></script>
 <script src="sound.js?v=b4e1ef97"></script>
 <script src="poses.js?v=573e2db4"></script>
-<script src="discwars.js?v=b4eeaf8b"></script>
+<script src="discwars.js?v=466122db"></script>
 <script>
 (function () {
   "use strict";
@@ -563,7 +566,7 @@
       ch = null;
       hallLine = '<div class="champ">' + st.fighters.filter(function (f) { return f.seated; })
         .map(function (f) {
-          return (f.rank || "CHAMPION") + ' <b class="' + (f.team === 0 ? "a" : "b") + '">' + f.name + "</b>" +
+          return (f.rank || "CHAMPION") + ' <b class="nm ' + (f.team === 0 ? "a" : "b") + '">' + f.name + "</b>" +
                  (f.alive ? "" : " \u2715");
         }).join(" \u00b7 ") + "</div>";
     }
@@ -583,7 +586,7 @@
       '<span class="side a">' + st.sides[0] + "</span>" + pips(0) +
       "<b>" + st.score[0] + " : " + st.score[1] + "</b>" +
       pips(1) + '<span class="side b">' + st.sides[1] + "</span>" +
-      (ch ? '<div class="champ">' + (ch.rank || "CHAMPION") + ' <b class="' + (ch.team === 0 ? "a" : "b") + '">' +
+      (ch ? '<div class="champ">' + (ch.rank || "CHAMPION") + ' <b class="nm ' + (ch.team === 0 ? "a" : "b") + '">' +
             ch.name + "</b> \u00b7 " + ch.stats.rounds +
             (ch.stats.rounds === 1 ? " ROUND HELD" : " ROUNDS HELD") +
             " \u00b7 " + ch.points + " PTS \u00b7 " + ch.stats.kills +
@@ -711,7 +714,7 @@
         return '<div class="row' + (on ? " on" : "") + '" data-id="' + id + '">' +
           '<input type="checkbox" aria-label="Field ' + esc(r.name) + '"' + (on ? " checked" : "") + ">" +
           '<div class="who"><span class="rk">' + esc(r.rank || "CHAMPION") + "</span>" +
-            '<b class="' + (side === 0 ? "a" : "b") + '">' + esc(r.name) + "</b>" +
+            '<b class="nm ' + (side === 0 ? "a" : "b") + '">' + esc(r.name) + "</b>" +
             (live[r.id] ? " · REIGNING" : "") +
             "<small>" + (r.rounds | 0) + ((r.rounds | 0) === 1 ? " ROUND HELD" : " ROUNDS HELD") +
             " · " + (st.kills | 0) + ((st.kills | 0) === 1 ? " KILL" : " KILLS") +
@@ -908,10 +911,10 @@
       leads.forEach(function (f, t) {
         var side = t === 0 ? "a" : "b";
         document.getElementById("flywho" + t).innerHTML = f
-          ? (f.champion ? "★ " : "") + f.name +
+          ? (f.champion ? "★ " : "") + '<span class="nm">' + f.name + "</span>" +
             "<small>" + f.decisions + (f.decisions === 1 ? " MOVE" : " MOVES") +
             " · " + Math.round(f.dopamine) + " DA" +
-            (f.teacher ? " · TAUGHT BY " + f.teacher : "") +
+            (f.teacher ? ' · TAUGHT BY <span class="nm">' + f.teacher + "</span>" : "") +
             (f.absorbed ? " · HOLDS " + f.absorbed + (f.absorbed === 1 ? " MATE" : " MATES") : "") +
             "</small>"
           : "";

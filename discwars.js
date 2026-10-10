@@ -383,10 +383,15 @@
     "ICON", "SNOBOL", "ELM", "NIM", "CRYSTAL", "RED", "FACTOR", "SELF",
     "CLIPPER", "SIMULA"
   ];
+  // And two that are not from any pool, spelled the way their owners spell
+  // them. Rare on purpose: a name you see every round is furniture.
+  var EGGS = ["Tal", "ZuGzUg"];
+  var EGG_CHANCE = 1 / 40;
 
   function freshName(taken) {
     for (var tries = 0; tries < 200; tries++) {
-      var n = NAMES[Math.floor(Math.random() * NAMES.length)];
+      var pool = Math.random() < EGG_CHANCE ? EGGS : NAMES;
+      var n = pool[Math.floor(Math.random() * pool.length)];
       if (taken.indexOf(n) < 0) { taken.push(n); return n; }
     }
     return "PROC" + Math.floor(Math.random() * 90 + 10);

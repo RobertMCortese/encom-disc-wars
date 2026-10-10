@@ -385,9 +385,9 @@
 <script src="learn.js?v=d1de0737"></script>
 <script src="mbdata.js?v=60a3e3e7"></script>
 <script src="flybrain.js?v=a96d3f61"></script>
-<script src="sound.js?v=af825e47"></script>
+<script src="sound.js?v=b4e1ef97"></script>
 <script src="poses.js?v=573e2db4"></script>
-<script src="discwars.js?v=ba59346b"></script>
+<script src="discwars.js?v=b4eeaf8b"></script>
 <script>
 (function () {
   "use strict";
@@ -952,9 +952,10 @@
   setInterval(drawBrains, FB ? 120 : 600);         // a fly's neurons are worth watching
 
   // ── Sound ─────────────────────────────────────────────────────────────
-  // The fight drives a 120 BPM sequencer: a throw is a chromatic run half a
-  // measure long, a block a whole one, both held to the next eighth so they
-  // land on the beat. Starting it needs a click -- browsers require one
+  // The fight plays over a 120 BPM track: chords, a bassline, and a riff
+  // for every fighter, played when it throws -- a champion keeps its riff
+  // into the next round. With it on, fighters let go of their throws on the
+  // grid. Starting it needs a click -- browsers require one
   // before any audio, and a page that made noise on open would deserve it.
   var soundBtn = document.getElementById("sound");
   var soundReady = !!window.DiscWarsSound;
@@ -965,10 +966,16 @@
       // "out" shapes the tempo, "round" both that and the held notes;
       // everything else is a sound.
       if (kind === "decide" || kind === "dopamine" || kind === "absorb" || kind === "record") return;   // the flies', not the kit's
-      if (kind === "out") DiscWarsSound.mark(kind);
+      if (kind === "out") DiscWarsSound.mark(kind, info);
       else if (kind === "round") { DiscWarsSound.mark(kind); DiscWarsSound.play(kind, info); }
       else DiscWarsSound.play(kind, info);
     });
+    // Throws wait for the grid while the music is actually playing.
+    if (DiscWars.setBeatClock) {
+      DiscWars.setBeatClock(function (windUp, team, name, champion) {
+        return DiscWarsSound.live ? DiscWarsSound.syncThrow(windUp, team, name, champion) : windUp;
+      });
+    }
     // The tempo rises with every fighter knocked out, so show where it is.
     setInterval(function () {
       if (!DiscWarsSound.on) return;

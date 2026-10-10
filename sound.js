@@ -1,22 +1,36 @@
-// The fight, as a sequencer.
+// The fight, as a track.
 //
 // A four-on-the-floor kick with a snare on two and four holds 120 BPM under
-// everything. On top of that the fight plays itself: every throw fires a
-// chromatic run half a measure long, every block a whole one. Nothing is
-// composed -- the arrangement is whatever the fighters happen to do, and a
-// 3v3 with three exchanges in the air sounds like a busier bar than a duel
-// does.
+// everything, an open hat on every off-beat, and a bassline on the root.
+// Over that, a riff: sixteen steps through the notes of the chord, round and
+// round, the way a French house record is built. The chords move every two
+// bars and the riff moves with them. Every round is dealt its own
+// progression and basslines, and every fourth bar ends on a fill.
 //
-// The one thing that makes this music rather than clatter is that events do
-// not play when they happen. A throw lands wherever it lands, and its run is
-// held until the next eighth-note on the grid, so it falls on the beat. At
-// 120 BPM that wait is never more than a quarter second, which reads as
-// tight rather than late, and the disc is still in the air either way.
+// Every fighter has a riff of its own, one of thirty-six, and plays it when it
+// throws: a bar of it, starting on the eighth the disc leaves the hand. The
+// riff goes with the name, so a champion brings its riff into the next round
+// and back out of the Hall, and no two fighters in a round share one.
+//
+// What came before this had the fight write the notes. Every fighter's name
+// hashed out a phrase of its own, a throw played it, and every throw moved
+// the key. It was honest and it sounded like random beeps: nothing came
+// round twice, so there was nothing to recognise. Now the notes are written
+// and the fight ARRANGES them. Throws strike the chord on the grid; discs in
+// the air open the riff's filter, so a busy exchange sweeps it bright and a
+// lull lets it close back down; each side plays its fighters' riffs its own
+// way, so an exchange is call and response. The same exchange still sounds like the same
+// exchange -- it is just played on a record now rather than on a keyboard
+// that somebody dropped.
+//
+// The fight keeps time with it, too. When Sound is on, a fighter about to
+// throw waits for the grid and lets go on it, so the disc leaves the hand
+// on an eighth note and the stab you hear is the throw you see.
 //
 // Everything is made from oscillators and one buffer of noise: no samples,
-// nothing fetched, a few hundred lines. Times come from the audio clock and
-// are scheduled ahead of playback -- setTimeout is far too loose to sequence
-// from, and would swing every beat audibly.
+// nothing fetched. Times come from the audio clock and are scheduled ahead
+// of playback -- setTimeout is far too loose to sequence from, and would
+// swing every beat audibly.
 (function () {
   "use strict";
 
@@ -25,25 +39,18 @@
   var MAX_BPM = 200;
   // The tempo is not fixed: each fighter knocked out of the round takes it up
   // ten, and a new round drops it back. A 3v3 worn down to a win runs 120 to
-  // as much as 170, so the last exchanges are the fastest, and then it starts
-  // over. A change waits for the top of a bar rather than landing wherever
-  // the fight happens to put it -- stepping tempo mid-phrase smears the run
-  // that is already playing, and a bar line is where a tempo change belongs.
+  // as much as 170, so the last exchanges are the fastest. A change waits for
+  // the top of a bar: a bar line is where a tempo change belongs.
   var bpm = BASE_BPM, wantBpm = BASE_BPM;
   var STEP = 60 / BASE_BPM / 2;    // the grid everything snaps to: eighths
   var LOOKAHEAD = 0.12;            // seconds of audio scheduled in advance
   var TICK = 25;                   // ms between runs of the scheduler
-  // One line a side, and the side is busy until its figure has finished.
-  // Naming the speaker was not enough on its own: a figure runs about five
-  // seconds and a fighter throws oftener than that, so the same program was
-  // laying figures over its own.
-  var voiceUntil = [0, 0];
   var fighting = false;            // between the deciding fall and the next round
 
   var ctx = null, master = null, notes = null, comp = null, noise = null;
   var sounding = [];               // every melodic voice currently ringing
   var step = 0, stepTime = 0, timer = null;
-  var pending = [];                // events waiting for their slot
+  var pending = [];                // kit events waiting for their slot
   var running = false;
 
   function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
@@ -149,26 +156,42 @@
     s.start(t); s.stop(t + 1.02);
   }
 
-  // ── The runs ──────────────────────────────────────────────────────────
-  // One plucked note: a saw through a filter that closes as it decays, which
-  // is most of what makes a line like this sound the way it does.
+  // A hat: noise through a high-pass, a tick when closed and a hiss when
+  // open. The open one on every off-beat is most of what turns four kicks a
+  // bar into a groove rather than a metronome.
+  function hat(t, open) {
+    var s = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = noise;
+    hp.type = "highpass"; hp.frequency.value = 7000;
+    var len = open ? 0.16 : 0.04;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(open ? HAT_OPEN : HAT_CLOSED, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    s.connect(hp); hp.connect(g); g.connect(master);
+    // A different stretch of the noise each time, or every hat is one hat.
+    s.start(t, Math.random() * 1.5); s.stop(t + len + 0.01);
+  }
+
+  // ── Keeping hold of what rings ────────────────────────────────────────
   // Everything melodic is registered here, because a note that has been
   // scheduled is otherwise beyond reach: the web audio graph will play it
   // whatever happens next, and what happens next may be that the fight it
   // belonged to ended.
   function keep(g, os, end) {
     sounding.push({ g: g, os: os, end: end });
-    if (sounding.length > 128) {
+    if (sounding.length > 160) {
       var now = ctx.currentTime;
       sounding = sounding.filter(function (v) { return v.end > now; });
     }
   }
 
   // Silence, now. A round is over the moment the last of a side falls, and a
-  // run still ringing over the result is a fight carrying on after it has
-  // been decided. Everything scheduled goes with it, including the notes
-  // that had not started yet. The kit plays on: it is the clock, not the
-  // argument, and a round should not cost the track its pulse.
+  // riff still going over the result is a fight carrying on after it has
+  // been decided. The kit plays on: it is the clock, not the argument, and
+  // a round should not cost the track its pulse. A hit that has already
+  // landed still sounds, so kit events waiting for their slot stay -- the
+  // deciding derez is queued for the grid, the round ends before its slot
+  // comes round, and emptying the queue here once took its cymbal with it.
   function cutAll() {
     if (!ctx) return;
     var t = ctx.currentTime;
@@ -184,203 +207,32 @@
       } catch (e) { /* node already finished */ }
     }
     sounding = [];
-    voiceUntil = [0, 0];
-    hanging = {};
-    // The kit is not part of the argument, and a hit that has already landed
-    // still sounds. Emptying the queue here took the deciding blow's own
-    // cymbal with it: a derez is queued for its slot on the grid, and the
-    // round ends before that slot comes round, so the one derez in a round
-    // that anybody is actually waiting to hear was the one that never played.
-    // Kit events stay; a block keeps its tom and loses only its line.
-    var rest = [];
-    for (var j = 0; j < pending.length; j++) {
-      if (pending[j].kind === "throw") continue;  // a throw is nothing but a line
-      rest.push(pending[j]);
-    }
-    pending = rest;
+    reserved = [];
+    pending = pending.filter(function (e) { return e.kind !== "stab"; });
   }
 
-  // ── Six voices ────────────────────────────────────────────────────────
-  // A name picks a timbre the same way it picks a figure, so a program
-  // sounds like itself for as long as it is in the arena, and a champion
-  // that survives into the next round is recognisable before you have read
-  // its name. What separates these is mostly how they begin and how they let
-  // go rather than which waveform they run on: a bell is a bell because it
-  // is struck and then abandoned, and strings are strings because they are
-  // never struck at all.
-  //
-  // Attack, body, release, in all of them. What was here before was an
-  // attack of six milliseconds straight into a decay, with the lowpass
-  // closing over the same span, so every note was a pluck however long it
-  // was told to last and a long note was only a longer beep.
-  var VOICES = ["saw", "square", "sine", "strings", "piano", "bell"];
-
-  function cents(f, c) { return f * Math.pow(2, c / 1200); }
-
-  function pluck(t, midi, dur, kind, gain, voice) {
-    var f0 = mtof(midi);
-    var g = ctx.createGain();
-    g.connect(notes);
-    var os = [], i;
-    var endAt = t + dur;                            // when this note is actually finished
-
-    if (voice === "strings") {
-      // Bowed: it arrives rather than starts. Three saws a few cents apart,
-      // so the pitch never quite settles, and the filter opens as it swells.
-      var atk = Math.min(0.2, dur * 0.5), rel = Math.min(0.55, dur * 0.55);
-      var lp = ctx.createBiquadFilter();
-      lp.type = "lowpass"; lp.Q.value = 0.9;
-      lp.frequency.setValueAtTime(Math.max(f0 * 1.8, 180), t);
-      lp.frequency.linearRampToValueAtTime(Math.min(f0 * 6, 5200), t + atk);
-      lp.connect(g);
-      for (i = 0; i < 3; i++) {
-        var so = ctx.createOscillator();
-        so.type = "sawtooth";
-        so.frequency.value = cents(f0, [-7, 0, 8][i]);
-        so.connect(lp); os.push(so);
-      }
-      var slvl = gain * 0.36;                     // three saws summed: a third each
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(slvl, t + atk);
-      g.gain.setValueAtTime(slvl, t + Math.max(atk, dur - rel));
-      endAt = t + dur + rel * 0.5;                // and a long tail
-      g.gain.exponentialRampToValueAtTime(0.0001, endAt);
-
-    } else if (voice === "piano") {
-      // Struck and let go: three partials, the upper ones shorter, so the
-      // tone darkens as it falls away the way a struck string does.
-      var pg = [1, 0.4, 0.17], pd = [1, 0.55, 0.3];
-      for (i = 0; i < 3; i++) {
-        var po = ctx.createOscillator(), pgn = ctx.createGain();
-        po.type = i === 0 ? "triangle" : "sine";
-        po.frequency.value = f0 * (i + 1);
-        pgn.gain.setValueAtTime(0.0001, t);
-        pgn.gain.exponentialRampToValueAtTime(pg[i], t + 0.004);
-        pgn.gain.exponentialRampToValueAtTime(0.0001, t + dur * pd[i] + 0.05);
-        endAt = Math.max(endAt, t + dur * pd[i] + 0.05);
-        po.connect(pgn); pgn.connect(g); os.push(po);
-      }
-      g.gain.setValueAtTime(gain * 0.62, t);    // partials sum to about 1.6
-
-    } else if (voice === "bell") {
-      // Frequency modulation at an interval that belongs to no scale, which
-      // is what makes metal sound like metal. The modulation dies away
-      // faster than the note, so it rings clean after it has been hit.
-      var car = ctx.createOscillator(), mod = ctx.createOscillator();
-      var mg = ctx.createGain();
-      car.type = "sine"; car.frequency.value = f0;
-      mod.type = "sine"; mod.frequency.value = f0 * 3.47;     // inharmonic on purpose
-      mg.gain.setValueAtTime(f0 * 5, t);
-      mg.gain.exponentialRampToValueAtTime(f0 * 0.25, t + Math.min(0.5, dur * 0.7));
-      mod.connect(mg); mg.connect(car.frequency);
-      car.connect(g); os.push(car); os.push(mod);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(gain * 0.9, t + 0.004);
-      endAt = t + dur + 0.25;                     // metal rings on after it is hit
-      g.gain.exponentialRampToValueAtTime(0.0001, endAt);
-
-    } else {
-      // The three simple ones: a saw to buzz, a square to sound hollow, a
-      // sine with nothing in it at all. A body between the attack and the
-      // release, and a filter that stays open across it instead of shutting
-      // the moment the note is struck.
-      var atk2 = 0.006, rel2 = Math.min(0.3, dur * 0.35);
-      var body = Math.max(0.004, dur - atk2 - rel2);
-      var sus = dur > 0.3 ? 0.8 : 0.4;              // a held note keeps its level; a stab does not
-      var o = ctx.createOscillator();
-      o.type = voice === "sine" ? "sine" : voice === "square" ? "square" : "sawtooth";
-      o.frequency.value = f0;
-      if (voice === "sine") {
-        o.connect(g);                               // nothing to filter out
-      } else {
-        var f = ctx.createBiquadFilter();
-        f.type = "lowpass"; f.Q.value = 9;
-        f.frequency.setValueAtTime(Math.min(f0 * 7, 9000), t);
-        f.frequency.exponentialRampToValueAtTime(Math.max(f0 * 2.4, 170), t + atk2 + body);
-        f.frequency.exponentialRampToValueAtTime(Math.max(f0 * 1.3, 110), t + dur);
-        o.connect(f); f.connect(g);
-      }
-      os.push(o);
-      var lvl = gain * (voice === "sine" ? 1.25 : 1);   // a sine carries less, so lift it
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(lvl, t + atk2);
-      g.gain.exponentialRampToValueAtTime(lvl * sus, t + atk2 + body);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    }
-
-    var off = endAt + 0.03;
-    for (i = 0; i < os.length; i++) { os[i].start(t); os[i].stop(off); }
-    keep(g, os, off);
-  }
-
-  // Programs sit an octave above sentinels, so who is doing what is audible.
-  // Where a throw is aimed sets which degree its run starts on, and a block
-  // answers by walking back down: the line follows the fight rather than
-  // decorating it.
-  //
-  // D# natural minor, all seven. The six originally asked for left out A#,
-  // which is the fifth, and a riff of this kind is built on its root and its
-  // fifth before anything else -- the textbook acid ostinato is two notes and
-  // they are those two. Without one there was nothing for a line to lean on
-  // and nowhere for it to come to rest. Take the 7 back out of SCALE to have
-  // the six again; everything below is written in degrees and will follow.
+  // ── The harmony ───────────────────────────────────────────────────────
+  // D# natural minor, and four chords in it, two bars each. Which four is
+  // picked fresh every round from PROGS, so the ground under one round is
+  // not the ground under the last. Everything below is written in degrees
+  // of SCALE, so it follows if the scale is changed.
   var ROOT = 27;                                   // D#1
   var SCALE = [0, 2, 3, 5, 7, 8, 10];              // D# E# F# G# A# B C#
+  // Each chord's root, as a degree.
+  var PROGS = [
+    [0, 5, 2, 6],                                  // i VI III VII: D#m B F# C#, the trailer's walk
+    [0, 6, 5, 6],                                  // i VII VI VII: D#m C# B C#, the minor-key lift
+    [0, 3, 5, 4],                                  // i iv VI v: D#m G#m B A#m, darker
+    [0, 5, 3, 4]                                   // i VI iv v: D#m B G#m A#m
+  ];
+  var BARS_PER_CHORD = 2;
+  var TRIAD = [0, 2, 4];
+  // The riff's notes, as steps above the chord's root: root, third, fifth,
+  // octave, the third above that and the fifth above that. Every one is in
+  // the chord, so however a riff is entered it never argues with what is
+  // under it.
+  var TONES = [0, 2, 4, 7, 9, 11];
 
-  // Where each side's notes are allowed to sit. A run walks as far as its
-  // figure takes it, and a long one walks a long way -- a thirteen-note
-  // block descending from D#1 ended up under 5 Hz, which is ten of its
-  // thirteen notes spent below anything anyone can hear. Folding by octaves
-  // keeps the shape of the line and puts it back in the room.
-  // The figures repeat, because a name always gives the same one. So the
-  // ground they stand on moves instead: every throw shifts the whole figure,
-  // up or down at random, never further than two either way, and every
-  // fourth throw drops it back where it started.
-  //
-  // It shifts by a DEGREE of the scale, not by a semitone. A semitone was
-  // the obvious reading and it was wrong: move a minor scale a semitone and
-  // every note of it lands outside the key, and with several fighters at
-  // different offsets at once the arena was playing all twelve pitch classes
-  // at roughly even weight. There was no key left to hear. A degree moves
-  // the figure the same distance to the ear and keeps every note in D# minor,
-  // so three fighters going at once still agree about what key they are in.
-  // Only the notes move -- the kit is where it was, and a drum that followed
-  // the key around would stop sounding like a drum.
-  var TRANS_MAX = 2, TRANS_EVERY = 4;
-  var trans = 0, transStep = 0;
-  function stepKey() {
-    if (transStep >= TRANS_EVERY) { trans = 0; transStep = 0; return; }
-    var dir = Math.random() < 0.5 ? -1 : 1;
-    if (trans + dir > TRANS_MAX || trans + dir < -TRANS_MAX) dir = -dir;
-    trans += dir;
-    transStep++;
-  }
-
-  // Programs carry the tune and sentinels carry the bass, so they are given
-  // separate ground to stand on rather than the same figure an octave apart.
-  // The two windows do not touch, so nothing either side plays can be mistaken
-  // for the other -- and neither can hide inside the other's register.
-  // The bass floor is A1 and not the D#1 the root suggests, because a laptop
-  // speaker does not reproduce 39Hz and a bassline nobody can hear is not a
-  // bassline.
-  var RANGE = [[52, 79], [33, 51]];                // programs: melody, sentinels: bass
-
-  // How many octaves a figure has to move to sit inside its side's window.
-  // This is worked out ONCE for a whole figure and applied to every note of
-  // it. Folding each note where it fell was the last thing making these read
-  // as random: a figure straddling the edge of the window had some of its
-  // notes shifted an octave and the rest left alone, so a rise came out as a
-  // fall and the line was turned inside out mid-phrase. The widest interval
-  // inside a cell is a fifth, yet minor sixths were the second commonest
-  // thing being played -- there was nowhere else they could have come from.
-  function foldShift(m, team) {
-    var r = RANGE[team] || RANGE[1], k = 0;
-    while (m + k < r[0]) k += 12;
-    while (m + k > r[1]) k -= 12;
-    return k;
-  }
-
-  // Degree d of the scale, carrying on into the octave above as it runs out.
   function degree(d) {
     var n = SCALE.length;
     var oct = Math.floor(d / n), i = d - oct * n;
@@ -388,162 +240,417 @@
     return SCALE[i] + 12 * oct;
   }
 
-  // ── A fighter's figure ────────────────────────────────────────────────
-  // Every run is an odd number of notes -- 7, 9, 11 or 13 -- played three,
-  // a breath, then the rest. Which length, the walk through the scale, and
-  // the rhythm all come from the fighter's own name, so GREP throws the same
-  // figure every time and a name that comes back in a later round brings its
-  // sound with it. Nothing is stored: the name is hashed and the figure falls
-  // out of the bits, so the same name always gives the same phrase.
-  //
-  // The rhythm is not an even run of sixteenths, because an even run of
-  // sixteenths is the one thing this style never does. Writing about Daft
-  // Punk's parts, Attack Magazine puts the hallmark as almost every
-  // consecutive note having a different length, with the emphasis moving
-  // around the sixteenths of the bar rather than sitting on the same ones,
-  // and gaps left on purpose. So a figure carries three cells -- where the
-  // notes fall, how long each rings, and where it steps to -- of lengths
-  // 4, 3 and 3, which come back into phase only every twelve notes. Nothing
-  // here is anybody's melody; it is a way of spacing notes.
-  //
-  // The pitches are a four-degree cell repeated for the length of the run,
-  // and they are absolute degrees rather than steps from wherever the last
-  // note happened to land. What was there before added a step each note, so
-  // a thirteen-note run was thirteen additions deep by the end and had drifted
-  // somewhere unrelated to where it started -- a random walk, which measures
-  // out as one: the intervals came out 68% leaps wider than a major third,
-  // spread flat across every size. Melodies are mostly steps and they come
-  // back. Every cell here starts on the root and leans on the fifth (degree
-  // 4) and the third (degree 2), and because it repeats inside the run there
-  // is something to recognise the second time it comes round.
-  var LENGTHS = [7, 9, 11, 13];
-  var CELLS = [                                    // degrees of the scale, repeated
-    [0, 0, 4, 2],                                  // root, root, fifth, third
-    [0, 4, 3, 2],
-    [0, 2, 4, 2],
-    [4, 2, 0, 2],
-    [0, 0, 2, 0],                                  // insistent on the root
-    [0, 1, 2, 4],                                  // stepwise up to the fifth
-    [4, 4, 2, 0],
-    [0, 2, 0, 4]                                  // root, third, root, fifth
-  ];
-  // Onsets were averaging 1.63 sixteenths apart, which is about eleven notes
-  // to the bar before a second fighter is even counted, and each note rang
-  // for 0.59 of the space before the next -- so there was a silence between
-  // every pair of them and nothing ever overlapped. Twice the room now, and
-  // the notes that matter ring into the ones that follow.
-  // A bassline is not a tune in a lower register. It holds the root and
-  // answers it, so its cells are mostly root with the fifth for relief, and
-  // it stays on instruments that keep their shape down there -- strings, a
-  // piano and a bell all turn to mud below A1.
-  var BASS_CELLS = [
-    [0, 0, 0, 4],
-    [0, 0, 4, 0],
-    [0, 0, 0, 0],                                  // just the root, driving
-    [0, 4, 0, 2],
-    [0, 0, 2, 0],
-    [0, 4, 4, 0]
-  ];
-  var BASS_VOICES = ["saw", "square", "sine"];
+  // The levels are set by ear on paper only, until somebody listens.
+  // Everything goes into one compressor, set to glue the kit.
+  var PAD_GAIN = 0.05;
+  var BASS_GAIN = 0.26;
+  var RIFF_GAIN = 0.11;
+  var STAB_GAIN = 0.09;
+  var HANG_GAIN = 0.06;
+  var HAT_CLOSED = 0.05, HAT_OPEN = 0.09;
+  var DUCK = 0.6;                  // the bed gives way this much on every kick
+  var PAD_LP = 900, PAD_LP_BUILD = 2500;
+  var DETUNE = 0.4;                // Hz either side; the slow beating is the shimmer
 
-  var GAPS = [2, 4, 3, 4, 2, 6, 3, 4];             // sixteenths from one onset to the next
-  var HOLDS = [0.7, 1.1, 0.8, 1.3];                // a passing tone: struck and gone
-  var SUSTAIN = [3, 5, 4, 7, 6, 4];                // an anchor: rings on over what follows
-  var OCTS = [0, 0, 0, 0, 7, 0];                   // every nth note up an octave, 0 for never
-  var figures = {};
+  // ── The riffs ─────────────────────────────────────────────────────────
+  // Sixteen sixteenths through the chord. Each entry is one of TONES, or -1
+  // for a rest; the rests are as much of a riff as the notes. There are
+  // thirty-six, so a fight of six is six tunes, and each fighter has one,
+  // and it is read against the bar rather than from its own first
+  // step, so a throw on the off-beat comes in partway through its riff and
+  // every riff keeps its accents where they belong however it is entered.
+  var RIFFS = [
+    [0, -1, 2, 3, -1, 2, -1, 1, 0, -1, 2, 3, -1, 2, 1, -1],       // the first one
+    [3, -1, 2, -1, 0, -1, 2, -1, 3, -1, 2, 0, -1, 1, 2, -1],
+    [0, 0, 2, -1, 3, -1, 2, 0, -1, 0, 2, -1, 3, 2, 1, -1],
+    [0, 2, 3, 4, 3, 2, 0, 2, 3, 4, 3, 2, 0, -1, 1, -1],            // climbing and back
+    [-1, -1, 3, -1, -1, -1, 3, -1, -1, -1, 3, -1, -1, 2, -1, 1],   // off-beat pumps
+    [0, -1, -1, 0, -1, -1, 2, -1, -1, 2, -1, -1, 3, -1, 1, -1],    // three, three, two
+    [0, 2, 3, 2, 0, 2, 3, 2, 0, 2, 4, 2, 0, 2, 3, 1],              // rolling sixteenths
+    [3, 3, -1, 2, -1, -1, -1, -1, 1, 1, -1, 0, -1, 2, -1, -1],     // call, then answer
+    [0, 3, 0, 3, -1, 3, 0, 3, 0, 3, -1, 3, 2, 3, 1, 3],            // octave bounce
+    [2, -1, -1, -1, -1, -1, 1, -1, -1, -1, -1, -1, 0, -1, -1, -1], // a slow hook, held
+    [4, -1, 3, -1, 2, -1, 3, -1, 4, -1, 3, -1, 2, 1, 0, -1],       // falling from the top
+    [0, -1, 1, 2, -1, 3, -1, 2, -1, 1, -1, 0, -1, -1, 2, -1],
+    [0, -1, 0, -1, 2, -1, 0, -1, 3, -1, 2, -1, 1, -1, 0, -1],      // walking eighths
+    [3, -1, -1, 3, -1, -1, 2, -1, 3, -1, -1, 3, -1, -1, 4, -1],    // octave, pushed
+    [0, 1, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2, -1, -1, -1],           // turning sixteenths
+    [5, -1, 3, -1, 5, -1, 3, -1, 4, -1, 2, -1, 3, -1, -1, -1],     // up high
+    [0, -1, -1, -1, 3, -1, -1, -1, 2, -1, -1, -1, 1, -1, -1, -1],  // four on the beat, falling
+    [-1, 0, -1, 0, -1, 2, -1, 2, -1, 3, -1, 3, -1, 2, -1, 1],      // all off the beat
+    [0, 0, -1, 0, 0, -1, 0, -1, 2, 2, -1, 2, 3, -1, 1, -1],        // stutter
+    [3, 2, 3, -1, 3, 2, 3, -1, 4, 3, 4, -1, 2, -1, 0, -1],         // trill and drop
+    [0, -1, 2, -1, 3, -1, 5, -1, 3, -1, 2, -1, 0, -1, -1, -1],     // up the chord and down
+    [-1, -1, -1, -1, 0, 2, 3, 4, -1, -1, -1, -1, 4, 3, 2, 0],      // run up, run down
+    [2, -1, -1, 1, -1, -1, 0, -1, 2, -1, -1, 1, -1, -1, 3, -1],    // three, three, two, sung
+    [0, 3, -1, 0, 3, -1, 0, 3, -1, 0, 3, -1, 2, -1, 1, -1],        // octaves across the bar
+    [4, 4, -1, 3, -1, 2, -1, -1, 3, 3, -1, 2, -1, 0, -1, -1],      // two sighs
+    [0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 4, -1, 2, -1],      // ladder
+    [-1, 3, -1, -1, 3, -1, -1, 3, -1, -1, 3, -1, 2, -1, -1, -1],   // stabs between the beats
+    [0, 2, -1, 2, 0, 2, -1, 2, 1, 3, -1, 3, 1, 3, -1, 3],          // two and two
+    [5, 4, 3, 2, 1, 0, -1, -1, 5, 4, 3, 2, 1, 0, -1, -1],          // cascade
+    [0, -1, -1, 2, -1, -1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1], // said once
+    [3, -1, 0, -1, 3, -1, 0, -1, 3, -1, 0, -1, 2, -1, 1, -1],      // octave rock
+    [0, 1, 0, -1, 2, 3, 2, -1, 3, 4, 3, -1, 2, 1, 0, -1],          // turns, climbing
+    [-1, -1, 0, 2, -1, -1, 3, 2, -1, -1, 0, 2, -1, -1, 4, 3],      // pickups
+    [2, -1, 2, -1, 2, -1, 1, -1, 0, -1, 0, -1, 0, -1, -1, -1],     // repeated, falling
+    [0, -1, 3, 2, -1, 0, -1, 3, 2, -1, 0, -1, 3, -1, 2, -1],       // tumbling
+    [4, -1, -1, -1, 3, -1, -1, -1, 2, -1, -1, -1, 3, -1, 4, -1]    // a slow tune
+  ];
+  // Each side plays its fighters' riffs its own way: the programs high, on a
+  // pair of saws held legato; the sentinels an octave down on a square,
+  // clipped short. One riff a side at a time -- a throw from the same side
+  // takes over from whatever its side was playing -- and the two sides can
+  // overlap, high against low.
+  var SIDES = [
+    { base: ROOT + 36, wave: "sawtooth", gate: 0.85 },   // D#4
+    { base: ROOT + 24, wave: "square", gate: 0.45 }      // D#3
+  ];
+  // Every fourth bar the riff's last beat is changed, the way a house record
+  // marks the end of a phrase instead of running the loop straight through:
+  // the same notes an octave up, a beat of nothing, or a run down or up into
+  // the next bar. null is "the same notes, an octave up".
+  var FILLS = [null, [-1, -1, -1, -1], [3, 2, 1, 0], [0, 1, 2, 3]];
 
-  function figure(name, team) {
-    var key = team + "|" + (name || "");
-    if (figures[key]) return figures[key];
+  // Basslines, dealt a pair a round, turning over every eight bars. 1 the
+  // root, 2 its octave, 3 its fifth, 0 nothing; a note is held up to the next
+  // one and then gated, so a long gap is a long note.
+  var BASSES = [
+    { gate: 0.45, steps: [1, 0, 2, 1, 0, 1, 2, 0, 1, 0, 2, 1, 0, 2, 1, 2] },   // octaves, driving
+    { gate: 0.5,  steps: [1, 0, 1, 0, 2, 0, 1, 0, 1, 0, 1, 0, 2, 0, 3, 0] },   // straight eighths
+    { gate: 0.8,  steps: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 3, 0, 2, 0] },   // syncopated
+    { gate: 0.9,  steps: [1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2, 0, 0, 0] }    // long, under a busy riff
+  ];
+
+  var bed = null;                  // its own bus, so the kick can push it down
+  var bedBar = -1, chord = 0, variation = 0;
+  // What this round was dealt: a progression, a pair of basslines, and the
+  // fill the next fourth bar ends on.
+  var prog = PROGS[0], basses = [0, 1], fill = 0;
+  // The riff each side is playing, if any: whose, which, and how many
+  // sixteenths of it are left.
+  var phrases = [null, null];
+  // How much is going on: each throw, block, ring and fall adds to it, and
+  // it drains away an eighth at a time. It is what the riff's filter opens
+  // to, so a flurry of throws sweeps it bright and a lull lets it close.
+  var heat = 0, HEAT_DECAY = 0.93;
+  var lastStand = false, building = false;
+  var onEdge = {};                 // everybody hanging off a ring edge
+  var padFilters = [];             // the pad now ringing, so a build can open it mid-chord
+  var reserved = [];               // throws already given a slot on the grid
+  var lastStab = -1;
+  var stats = { chords: 0, bass: 0, riff: 0, phrases: 0, stabs: 0, synced: 0, ducks: 0, builds: 0 };
+
+  function chordRoot() { return prog[chord]; }
+
+  function pick(n) { return Math.floor(Math.random() * n); }
+
+  // A new round, a new hand: a progression and two basslines. The riffs
+  // are the fighters', and they keep them.
+  function dealRound() {
+    prog = PROGS[pick(PROGS.length)];
+    var b0 = pick(BASSES.length), b1 = (b0 + 1 + pick(BASSES.length - 1)) % BASSES.length;
+    basses = [b0, b1];
+  }
+
+  // ── Whose riff is whose ───────────────────────────────────────────────
+  // A name is hashed to a riff, and the answer is written down, so the same
+  // name always plays the same riff: a champion carries its riff into the
+  // next round, and one fielded from the Hall comes back with it. The book
+  // is kept in the browser alongside the Hall.
+  //
+  // No two fighters in a round play the same riff -- that would make two of
+  // them one voice. The first to throw claims theirs; anyone after whose
+  // riff is already taken borrows the next free one for the round and keeps
+  // its own in the book. A champion is never the one who moves: if a new
+  // program got there first, it is the program that is moved on.
+  var BOOK_KEY = "discwars.riffs";
+  var book = {}, claimed = {};                     // name -> riff: for good, and this round
+  try { book = JSON.parse(localStorage.getItem(BOOK_KEY) || "{}") || {}; } catch (e) { book = {}; }
+
+  function hashName(name) {
     var h = 2166136261;
-    for (var i = 0; i < key.length; i++) {
-      h ^= key.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    h = h >>> 0;
-    var bass = team === 1;
-    var pool = bass ? BASS_CELLS : CELLS;
-    var kit = bass ? BASS_VOICES : VOICES;
-    var cell = pool[(h >>> 5) % pool.length], gaps = [], holds = [];
-    for (var m = 0; m < 3; m++) gaps.push(GAPS[(h >>> (2 + m * 5)) % GAPS.length]);
-    for (var q = 0; q < 3; q++) holds.push(HOLDS[(h >>> (7 + q * 4)) % HOLDS.length]);
-    var f = { n: LENGTHS[h % LENGTHS.length], cell: cell, gaps: gaps, holds: holds,
-              sus: SUSTAIN[(h >>> 21) % SUSTAIN.length],
-              voice: kit[(h >>> 24) % kit.length], bass: bass,
-              oct: OCTS[(h >>> 17) % OCTS.length] };
-    figures[key] = f;
-    return f;
+    for (var i = 0; i < name.length; i++) { h ^= name.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
   }
 
-  function run(t0, e) {
-    var fig = figure(e.name, e.team);
-    var six = STEP / 2;                            // the sixteenth everything is measured in
-    var base = ROOT + (e.team === 0 ? 12 : 0);
-    // A melodic block answers an octave below the throw it turns away. A bass
-    // one stays where it is: there is no octave under a bassline to drop to.
-    var lift = (e.kind === "block" && !fig.bass) ? -7 : 0;
-    var gain = e.kind === "block" ? 0.15 : 0.12;
-    var rot = e.aim || 0;                          // aim enters the cell at a different note
-    var t = t0;
-    // Placed by its lowest note, so nothing in the figure drops out of hearing.
-    var low = Math.min.apply(null, fig.cell) + lift + trans;
-    var off = foldShift(base + degree(low), e.team);
-    for (var i = 0; i < fig.n; i++) {
-      if (i === 3) t += six * 2;                   // three, a breath, then the rest
-      var deg = fig.cell[(i + rot) % fig.cell.length];
-      var gap = fig.gaps[i % fig.gaps.length];
-      // The root and the fifth are what the figure is built on, so they are
-      // what rings -- held over the notes that follow them. The degrees
-      // between are passing and stay short. Every note being the same length
-      // is most of what made these read as a machine rather than a part.
-      var anchor = (deg === 0 || deg === 4);
-      var hold = anchor ? Math.min(fig.sus, gap + 3) : fig.holds[i % fig.holds.length];
-      // A bassline is monophonic. Notes of different pitch ringing over each
-      // other down there is mud rather than harmony, so a bass note lasts
-      // exactly up to the next one: joined up, never stacked. Its lengths
-      // still vary, because the gaps do.
-      if (fig.bass) hold = gap * 0.98;
-      // A note that has had room before it lands harder, which is what puts
-      // the emphasis somewhere different each time round rather than on the
-      // beat every time. A held note comes in softer, because it is going to
-      // be there a while and there may be two more over the top of it.
-      var hit = gain * (gap >= 3 ? 1.18 : 0.88) * (anchor ? 0.78 : 1);
-      var up = (!fig.bass && fig.oct && (i + 1) % fig.oct === 0) ? 12 : 0;
-      var d = deg + lift + trans;
-      pluck(t, base + degree(d) + off + up, six * hold, e.kind, hit, fig.voice);
-      t += six * gap;
+  function riffFor(name, champion) {
+    name = name || "?";
+    if (claimed[name] != null) return claimed[name];
+    var own = book[name];
+    if (own == null || own >= RIFFS.length) {
+      own = hashName(name) % RIFFS.length;
+      book[name] = own;
+      try { localStorage.setItem(BOOK_KEY, JSON.stringify(book)); } catch (e) { /* private window: this visit only */ }
     }
-    voiceUntil[e.team] = t;          // this side has a line until here
+    var holder = null;
+    for (var n in claimed) if (claimed.hasOwnProperty(n) && claimed[n] === own) holder = n;
+    var mine = own;
+    if (holder !== null && champion) {
+      delete claimed[holder];                      // the champion keeps its riff; the other moves
+    } else if (holder !== null) {
+      var used = {};
+      for (n in claimed) if (claimed.hasOwnProperty(n)) used[claimed[n]] = true;
+      for (var k = 1; k < RIFFS.length && used[mine]; k++) mine = (own + k) % RIFFS.length;
+    }
+    claimed[name] = mine;
+    return mine;
   }
 
-  // ── Hanging on ────────────────────────────────────────────────────────
-  // A fighter over the edge holds on until it climbs back or is finished
-  // off, and for as long as it does its figure's first note is arpeggiated
-  // underneath everything: the note, its octave, and the degree between
-  // them, quietly, once an eighth. It is the one sound in the arena that is
-  // held rather than struck, so it reads as somebody still out there.
-  var hanging = {};
-  var hangN = 0;
+  // A fighter's throw: its riff, for a bar, from this eighth.
+  function startPhrase(team, name, champion) {
+    phrases[team] = { team: team, name: name, riff: riffFor(name, champion), left: 16 };
+    stats.phrases++;
+  }
 
-  function hangNote(t, who, k) {
-    var fig = figure(who.name, who.team);
-    var start = fig.cell[0] + trans;                // the degree its figure begins on
-    var step3 = [0, 2, 4][k % 3];                   // the note, its third, its fifth
-    var base = ROOT + (who.team === 0 ? 12 : 0);
-    var m = base + degree(start + step3) + foldShift(base + degree(start), who.team);
-    var o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
-    var f0 = mtof(m);
-    o.type = "triangle";                            // softer than the runs, so it sits under
-    o.frequency.value = f0;
-    lp.type = "lowpass"; lp.Q.value = 4;
-    lp.frequency.setValueAtTime(Math.min(f0 * 5, 7000), t);
-    lp.frequency.exponentialRampToValueAtTime(Math.max(f0 * 1.6, 140), t + 0.16);
+  // The riff a phrase is playing at sixteenth s of the bar, with this bar's fill.
+  function riffAt(riff, s, fillBar) {
+    var r = RIFFS[riff];
+    if (!fillBar || s < 12) return { tone: r[s], up: 0 };
+    var f = FILLS[fill];
+    if (!f) return { tone: r[s], up: 7 };          // an octave is seven degrees
+    return { tone: f[s - 12], up: 0 };
+  }
+
+  // The pump: every kick pushes the bed down and lets it back up inside the
+  // beat, so the chords and the riff breathe with the kit. The bed only;
+  // ducking master would pump the kick itself.
+  function duck(t) {
+    var back = Math.min(0.22, STEP * 1.2);
+    bed.gain.setValueAtTime(1, t);
+    bed.gain.linearRampToValueAtTime(1 - DUCK, t + 0.006);
+    bed.gain.linearRampToValueAtTime(1, t + back);
+    stats.ducks++;
+  }
+
+  // One chord, struck once and held for its whole length: two sines a note,
+  // a little apart, so it shimmers. Retriggered each bar, its slow attack
+  // would swell every bar on its own.
+  function padChord(t, dur) {
+    var g = ctx.createGain(), lp = ctx.createBiquadFilter(), os = [];
+    lp.type = "lowpass"; lp.Q.value = 0.5;
+    lp.frequency.setValueAtTime(building ? PAD_LP_BUILD : PAD_LP, t);
+    lp.connect(g); g.connect(bed);
+    for (var i = 0; i < TRIAD.length; i++) {
+      var f0 = mtof(ROOT + 24 + degree(chordRoot() + TRIAD[i]));
+      for (var k = -1; k <= 1; k += 2) {
+        var o = ctx.createOscillator();
+        o.type = "sine";
+        o.frequency.value = f0 + k * DETUNE;
+        o.connect(lp); os.push(o);
+      }
+    }
+    var lvl = PAD_GAIN / TRIAD.length;
+    var atk = Math.min(0.4, dur * 0.3), rel = Math.min(0.6, dur * 0.3);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.075, t + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-    o.connect(lp); lp.connect(g); g.connect(notes);
-    o.start(t); o.stop(t + 0.24);
-    keep(g, [o], t + 0.24);
+    g.gain.linearRampToValueAtTime(lvl, t + atk);
+    g.gain.setValueAtTime(lvl, t + dur - rel * 0.5);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur + rel);
+    var off = t + dur + rel + 0.03;
+    for (i = 0; i < os.length; i++) { os[i].start(t); os[i].stop(off); }
+    keep(g, os, off);
+    padFilters.push({ lp: lp, end: off });
+    stats.chords++;
+  }
+
+  // Half square for presence, half sine for weight, short and on the grid.
+  function bassNote(t, midi, dur) {
+    var f0 = mtof(midi);
+    var g = ctx.createGain(), lp = ctx.createBiquadFilter();
+    var sq = ctx.createOscillator(), si = ctx.createOscillator();
+    var sg = ctx.createGain(), ng = ctx.createGain();
+    lp.type = "lowpass"; lp.Q.value = 2;
+    lp.frequency.setValueAtTime(900, t);
+    lp.frequency.exponentialRampToValueAtTime(300, t + dur);
+    sq.type = "square"; sq.frequency.value = f0;
+    si.type = "sine"; si.frequency.value = f0;
+    sg.gain.value = 0.5; ng.gain.value = 0.6;
+    sq.connect(sg); si.connect(ng); sg.connect(lp); ng.connect(lp);
+    lp.connect(g); g.connect(bed);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(BASS_GAIN, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(BASS_GAIN * 0.5, t + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    var off = t + dur + 0.02;
+    sq.start(t); si.start(t); sq.stop(off); si.stop(off);
+    keep(g, [sq, si], off);
+    stats.bass++;
+  }
+
+  // One step of the riff: an oscillator through a resonant lowpass whose
+  // cutoff is the heat of the fight, with a little snap of filter at the
+  // start of each note. That moving filter is the sound of the whole style.
+  function riffNote(t, midi, dur, side) {
+    var f0 = mtof(midi);
+    var cut = 350 * Math.pow(2, 3.5 * Math.min(1, heat + (building ? 0.35 : 0)));
+    var g = ctx.createGain(), lp = ctx.createBiquadFilter(), os = [];
+    lp.type = "lowpass"; lp.Q.value = 7;
+    lp.frequency.setValueAtTime(Math.min(cut * 2.5, 12000), t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(cut, f0 * 1.2), t + Math.max(0.02, dur * 0.6));
+    lp.connect(g); g.connect(bed);
+    var n = side.wave === "sawtooth" ? 2 : 1;       // two saws a few cents apart: width
+    for (var i = 0; i < n; i++) {
+      var o = ctx.createOscillator();
+      o.type = side.wave;
+      o.frequency.value = f0 * (n > 1 ? Math.pow(2, (i ? 6 : -6) / 1200) : 1);
+      o.connect(lp); os.push(o);
+    }
+    var lvl = RIFF_GAIN / (n > 1 ? 1.4 : 1);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(lvl, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(lvl * 0.6, t + dur * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    var off = t + dur + 0.02;
+    for (i = 0; i < os.length; i++) { os[i].start(t); os[i].stop(off); }
+    keep(g, os, off);
+    stats.riff++;
+  }
+
+  // A throw strikes the chord: three saws, the whole triad, cut short. A
+  // block is the same chord an octave down and quieter -- the answer, not
+  // the question. Never two on the same step: three fighters letting go
+  // together is one hit, louder in the room but not in the mix.
+  function stab(t, low) {
+    if (Math.abs(t - lastStab) < 0.02) return;
+    lastStab = t;
+    var g = ctx.createGain(), lp = ctx.createBiquadFilter(), os = [];
+    lp.type = "lowpass"; lp.Q.value = 3;
+    lp.frequency.setValueAtTime(low ? 2400 : 5000, t);
+    lp.frequency.exponentialRampToValueAtTime(low ? 500 : 900, t + 0.14);
+    lp.connect(g); g.connect(notes);
+    var base = low ? ROOT + 24 : ROOT + 36;
+    for (var i = 0; i < TRIAD.length; i++) {
+      var o = ctx.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = mtof(base + degree(chordRoot() + TRIAD[i]));
+      o.connect(lp); os.push(o);
+    }
+    var lvl = (low ? 0.6 : 1) * STAB_GAIN / TRIAD.length * 1.7;
+    var len = low ? 0.14 : 0.2;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(lvl, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    var off = t + len + 0.02;
+    for (i = 0; i < os.length; i++) { os[i].start(t); os[i].stop(off); }
+    keep(g, os, off);
+    stats.stabs++;
+  }
+
+  // Somebody over the edge: the chord, arpeggiated high and quiet, once an
+  // eighth for as long as anybody is hanging on. It is the one sound in the
+  // arena that is held rather than struck, so it reads as somebody still
+  // out there.
+  function hangNote(t, k) {
+    var m = ROOT + 48 + degree(chordRoot() + TRIAD[k % 3]);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle";
+    o.frequency.value = mtof(m);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(HANG_GAIN, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    o.connect(g); g.connect(notes);
+    o.start(t); o.stop(t + 0.22);
+    keep(g, [o], t + 0.22);
+  }
+
+  // The build: a side down to its last fighter, or anybody hanging off an
+  // edge -- in a duel nobody is ever down to their last, so the edge is the
+  // only last stand a duel has. The pad opens up and the riff's filter
+  // stops closing all the way.
+  function setBuild(on, t) {
+    if (on === building) return;
+    building = on;
+    if (on) stats.builds++;
+    var live = [];
+    for (var i = 0; i < padFilters.length; i++) {
+      var p = padFilters[i];
+      if (p.end <= t) continue;
+      p.lp.frequency.setTargetAtTime(on ? PAD_LP_BUILD : PAD_LP, t, 0.4);
+      live.push(p);
+    }
+    padFilters = live;
+  }
+
+  // The round ends on a single low root left to ring out under the kit,
+  // the way the trailer's bed stopped. D#2: a laptop will not play D#1.
+  function tail() {
+    var t = ctx.currentTime + 0.01;
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = mtof(ROOT + 12);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.5);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 2.55);
+  }
+
+  function resetRound() {
+    bedBar = -1; chord = 0; variation = 0;
+    phrases = [null, null]; claimed = {};
+    dealRound();
+    heat = 0; lastStand = false; building = false;
+    onEdge = {}; padFilters = []; reserved = [];
+  }
+
+  // Once an eighth, from the clock. The round comes in a layer at a time:
+  // the pad and closed hats on its first bar, the bass and the open hats on
+  // its second. Over that, whatever riffs the fighters' throws have started.
+  function arrange(t, eighth, n) {
+    if (!fighting) return;
+    heat *= HEAT_DECAY;
+    var edge = Object.keys(onEdge).length > 0;
+    setBuild(lastStand || edge, t);
+    if (eighth === 0) {
+      bedBar++;
+      if (bedBar > 1 && (bedBar - 1) % 8 === 0) variation++;   // the other bassline
+      if (bedBar % 4 === 3) fill = pick(FILLS.length);
+      if (bedBar % BARS_PER_CHORD === 0) {
+        chord = (bedBar / BARS_PER_CHORD) % prog.length;
+        padChord(t, STEP * 8 * BARS_PER_CHORD);
+      }
+    }
+    var off = eighth % 2 === 1;
+    hat(t, off && bedBar >= 1);
+    if (edge) hangNote(t, n);
+    var six = STEP / 2;
+    var fillBar = bedBar % 4 === 3;
+    var hush = fillBar && FILLS[fill] && FILLS[fill][0] < 0;   // a beat of nothing
+    var bass = BASSES[basses[variation % 2]];
+    for (var k = 0; k < 2; k++) {
+      var s = eighth * 2 + k, ts = t + k * six, len;
+      var bn = bass.steps[s];
+      // The bass drops out with the riff for a fill that is a beat of nothing.
+      if (bedBar >= 1 && bn && !(hush && s >= 12)) {
+        len = 1;
+        while (len < 8 && s + len < 16 && !bass.steps[s + len]) len++;
+        var up = bn === 2 ? 7 : bn === 3 ? 4 : 0;
+        bassNote(ts, ROOT + 12 + degree(chordRoot() + up), six * len * bass.gate);
+      }
+      for (var team = 0; team < 2; team++) {
+        var ph = phrases[team];
+        if (!ph) continue;
+        var rn = riffAt(ph.riff, s, fillBar);
+        if (rn.tone >= 0) {
+          // Held up to the next note of the riff, then gated, so a rest is
+          // heard -- and never past the end of the phrase or the bar.
+          len = 1;
+          while (len < 6 && len < ph.left && s + len < 16 && riffAt(ph.riff, s + len, fillBar).tone < 0) len++;
+          var side = SIDES[team];
+          riffNote(ts, side.base + degree(chordRoot() + TONES[rn.tone] + rn.up), six * len * side.gate, side);
+        }
+        if (--ph.left <= 0) phrases[team] = null;
+      }
+    }
+  }
+
+  // ── The grid, for the fight ───────────────────────────────────────────
+  // The first eighth on the grid at or after a moment. The scheduler is
+  // always a little ahead, so the grid is known exactly up to stepTime and
+  // carried on from there at the tempo it is at.
+  function gridFrom(target) {
+    if (target <= stepTime) return stepTime - Math.floor((stepTime - target) / STEP) * STEP;
+    return stepTime + Math.ceil((target - stepTime) / STEP) * STEP;
   }
 
   // ── The clock ─────────────────────────────────────────────────────────
@@ -557,45 +664,39 @@
       }
       if (eighth % 2 === 0) {
         kick(stepTime);                            // every beat: the pulse
+        if (fighting) duck(stepTime);
         var b = eighth / 2;
         if (b === 1 || b === 3) snare(stepTime);   // two and four
       }
-      // Anybody still hanging holds their note under everything else.
-      for (var w in hanging) if (hanging.hasOwnProperty(w)) hangNote(stepTime, hanging[w], hangN);
-      hangN++;
-
-      // Where a thing is allowed to come in. A throw waits for a beat and a
-      // block for a half bar, so a line never starts in the middle of one --
-      // that is the difference between a part and a pile of events. The kit
-      // stays on the eighths, where it can answer off the beat.
-      var onBeat = (step % 2) === 0;
-      var onHalf = (step % 4) === 0;
-      var fired = 0;
-      for (var pi = 0; pi < pending.length && fired < 8; ) {
-        var e = pending[pi];
-        var due = e.kind === "throw" ? onBeat : e.kind === "block" ? onHalf : true;
-        if (!due) { pi++; continue; }
-        pending.splice(pi, 1);
-        fired++;
-        if (e.kind === "throw" || e.kind === "block") {
-          // Only the fighter speaking for its side is heard. Everything the
-          // others do still lands on the kit -- the drums are the arena, not
-          // anybody's part -- so a fight with six in it still sounds like a
-          // fight with six in it, while only two of them carry a line.
-          if (e.lead && fighting && stepTime >= voiceUntil[e.team]) {
-            if (e.kind === "throw") stepKey();     // a block stays in the key it answers
-            run(stepTime, e);
-          }
-          if (e.kind === "block") tom(stepTime, e.tom);
-        } else if (e.kind === "bounce" || e.kind === "home") {
-          tom(stepTime, e.tom);
-        } else if (e.kind === "ring") {
-          crash(stepTime);
-        } else if (e.kind === "derez") {
-          ride(stepTime);
+      // A throw that asked for this eighth starts its fighter's riff on it.
+      for (var r = 0; r < reserved.length; r++) {
+        var rv = reserved[r];
+        if (!rv.struck && Math.abs(rv.t - stepTime) < 1e-4) {
+          rv.struck = true;
+          if (fighting) startPhrase(rv.team, rv.name, rv.champion);
         }
       }
-      if (pending.length > 24) pending.length = 0; // a pile-up is not music
+      // So does one that did not ask, on the next eighth after it lands.
+      for (var q = 0; q < pending.length; ) {
+        if (pending[q].kind !== "phrase") { q++; continue; }
+        var pq = pending.splice(q, 1)[0];
+        if (fighting) startPhrase(pq.team, pq.name, pq.champion);
+      }
+      arrange(stepTime, eighth, step);
+
+      // The kit answers on the next eighth. It is never dropped when the bar
+      // is busy -- it is what the fight is doing -- but a pile-up is not
+      // music, so past a point the oldest go.
+      var fired = 0;
+      while (pending.length && fired < 8) {
+        var e = pending.shift();
+        fired++;
+        if (e.kind === "stab") { if (fighting) stab(stepTime, e.low); }
+        else if (e.kind === "tom") tom(stepTime, e.tom);
+        else if (e.kind === "crash") crash(stepTime);
+        else if (e.kind === "ride") ride(stepTime);
+      }
+      if (pending.length > 24) pending.length = 0;
       step++;
       stepTime += STEP;
     }
@@ -634,6 +735,18 @@
     // background tab at all, so wanting sound and having it are two
     // different questions and a control that conflates them lies.
     get live() { return running && !!ctx && ctx.state === "running"; },
+    // What the track has played since the page opened, for checking it is there.
+    get stats() {
+      var o = {};
+      for (var k in stats) if (stats.hasOwnProperty(k)) o[k] = stats[k];
+      o.building = building; o.variation = variation;
+      o.prog = PROGS.indexOf(prog);
+      o.playing = phrases.map(function (p) { return p ? p.name + ":" + p.riff : null; });
+      o.claimed = {};
+      for (var n in claimed) if (claimed.hasOwnProperty(n)) o.claimed[n] = claimed[n];
+      o.bassline = basses[variation % 2]; o.heat = +heat.toFixed(2);
+      return o;
+    },
 
     start: function () {
       var AC = window.AudioContext || window.webkitAudioContext;
@@ -648,12 +761,14 @@
         master = ctx.createGain();
         master.gain.value = 0.55;
         master.connect(comp); comp.connect(ctx.destination);
-        // The runs go through a bus of their own, apart from the kit. It is
-        // where they can be balanced against the drums, and it is the one
-        // place that knows what counts as a note rather than a hit.
+        // The stabs go through a bus of their own, apart from the kit.
         notes = ctx.createGain();
         notes.gain.value = 1;
         notes.connect(master);
+        // And the pad, bass and riff through another, which the kick ducks.
+        bed = ctx.createGain();
+        bed.gain.value = 1;
+        bed.connect(master);
         noise = makeNoise();
       }
       wake();
@@ -661,9 +776,9 @@
       bpm = wantBpm = BASE_BPM;
       STEP = 60 / bpm / 2;
       stepTime = ctx.currentTime + 0.08;
-      pending = []; voiceUntil = [0, 0]; hanging = {}; hangN = 0;
+      pending = [];
+      resetRound();
       fighting = true;              // the first round counts too
-      trans = 0; transStep = 0;
       running = true;
       watchForPermission();
       if (timer) clearInterval(timer);
@@ -675,38 +790,82 @@
     stop: function () {
       running = false;
       if (timer) { clearInterval(timer); timer = null; }
-      pending = [];
+      pending = []; reserved = [];
       if (ctx && ctx.state === "running") ctx.suspend();
     },
 
-    // What the fight has done to the shape of the round, rather than a note:
-    // a fighter out winds the tempo up, a new round puts it back.
-    mark: function (kind) {
-      if (kind === "out") wantBpm = Math.min(MAX_BPM, wantBpm + PER_LOSS);
-      else if (kind === "round") { wantBpm = BASE_BPM; hanging = {}; }
+    // A fighter about to throw asks when to let go. `after` is how long its
+    // wind-up takes, in real seconds; the answer is how long from now until
+    // the release should happen, which is the first eighth on the grid that
+    // the wind-up can reach. That eighth is held for the fighter's riff,
+    // which the clock starts exactly on it -- not wherever the next frame
+    // happens to fall, and in whatever chord is playing by then, since a
+    // throw half a second off can land past a chord change. The time handed
+    // back includes the audio's own delay to the speakers, so the disc leaves
+    // the hand when the riff is heard. Nothing to wait for when nothing is
+    // playing: then the answer is just `after`.
+    syncThrow: function (after, team, name, champion) {
+      if (!running || !ctx || ctx.state !== "running" || !fighting) return after;
+      var now = ctx.currentTime;
+      var t = gridFrom(now + after);
+      reserved.push({ t: t, team: team, name: name, champion: !!champion, struck: false });
+      if (reserved.length > 12) reserved.shift();
+      stats.synced++;
+      var lat = (ctx.baseLatency || 0) + (ctx.outputLatency || 0);
+      return t - now + lat;
     },
 
-    // Called by the fight. Held until the next slot on the grid.
+    // What the fight has done to the shape of the round, rather than a note:
+    // a fighter out winds the tempo up and turns the bassline over, a side down
+    // to its last fighter is a last stand, a new round puts it all back.
+    mark: function (kind, info) {
+      if (kind === "out") {
+        wantBpm = Math.min(MAX_BPM, wantBpm + PER_LOSS);
+        variation++;                               // the other bassline, now
+        heat = Math.min(1, heat + 0.3);
+        if (info && info.left === 1) lastStand = true;
+      }
+      else if (kind === "round") wantBpm = BASE_BPM;
+    },
+
+    // Called by the fight.
     play: function (kind, info) {
       if (!running || !ctx) return;
-      if (kind === "over") { fighting = false; cutAll(); return; }  // the last of a side is down
-      if (kind === "hang") {
-        if (!fighting) return;                     // the round is decided; nothing more is said
-        if (!info.lead) return;                    // only a side's own voice is heard hanging
-        hanging[info.name] = { name: info.name, team: info.team };
+      var team = (info && info.team) || 0;
+      if (kind === "over") {                       // the last of a side is down
+        var was = fighting;
+        fighting = false; cutAll(); resetRound();
+        if (was) tail();
         return;
       }
-      if (kind === "unhang") { delete hanging[info.name]; return; }
-      if (kind === "round") {                       // nobody hanging, back to the root
-        hanging = {}; trans = 0; transStep = 0;
-        fighting = true;
-        return;
+      if (kind === "round") { resetRound(); fighting = true; return; }
+      if (kind === "hang") { if (fighting) onEdge[info.name] = true; return; }
+      if (kind === "unhang") { delete onEdge[info.name]; return; }
+      if (!fighting && (kind === "throw" || kind === "block")) return;
+      if (kind === "throw") {
+        heat = Math.min(1, heat + 0.35);
+        // Already on the grid if the fighter asked when to let go.
+        var now = ctx.currentTime;
+        for (var i = 0; i < reserved.length; i++) {
+          if (reserved[i].team === team && Math.abs(reserved[i].t - now) < 0.3) {
+            reserved.splice(i, 1);
+            return;
+          }
+        }
+        pending.push({ kind: "phrase", team: team, name: info && info.name, champion: !!(info && info.champion) });
+      } else if (kind === "block") {
+        heat = Math.min(1, heat + 0.2);
+        pending.push({ kind: "stab", low: true });
+        pending.push({ kind: "tom", tom: info && info.tom != null ? info.tom : 1 });
+      } else if (kind === "bounce" || kind === "home") {
+        pending.push({ kind: "tom", tom: info && info.tom != null ? info.tom : 1 });
+      } else if (kind === "ring") {
+        heat = Math.min(1, heat + 0.25);
+        pending.push({ kind: "crash" });
+      } else if (kind === "derez") {
+        heat = Math.min(1, heat + 0.4);
+        pending.push({ kind: "ride" });
       }
-      pending.push({ kind: kind, team: (info && info.team) || 0,
-                     lead: !!(info && info.lead),
-                     aim: info && info.aim != null ? info.aim : 1,
-                     name: (info && info.name) || "",
-                     tom: info && info.tom != null ? info.tom : 1 });   // which drum, and whose figure
     }
   };
 })();

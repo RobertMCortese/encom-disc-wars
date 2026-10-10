@@ -62,75 +62,90 @@ will store, the least decorated make room.
 
 ## The fight plays itself
 
-Turn Sound on and the arena becomes a sequencer. A four-on-the-floor kick
-with a snare on two and four holds **120 BPM** underneath. On top of that the
-fight writes the part: every **throw** and every **block** fires a run of
-7, 9, 11 or 13 sixteenths — three notes, a breath, then the rest — walking D#
-natural minor less its fifth (D#, E#, F#, G#, B, C#) rather than semitones,
-so three lines at once still agree with each other.
+Turn Sound on and the arena plays a track. A four-on-the-floor kick with a
+snare on two and four holds **120 BPM**, an open hat hisses on every
+off-beat, and a bassline walks the root. The chords move every two bars in
+D# minor, and the bass moves with them.
 
-The rest of the fight is the kit: a **crash** for every ring smashed out from
-under somebody, a **tom** for every bounce and every block, and which one
-is not random — a disc falls through the kit as it travels: high for the
-first thing it hits, middle for the second or for a shield turning it away,
-low for the last and for its arrival back in the hand, so a throw off a wall,
-past its target, off the glass and home comes out as a descending fill that
-follows the disc, and a **ride** for every derez.
-Those are never dropped when the bar is busy; only the melodic runs are.
+**Every fighter has a riff of its own**, one of thirty-six: sixteen steps through
+the notes of the chord, the way a French house record is built. When it
+throws, it plays a bar of its riff, starting on the eighth the disc leaves its
+hand. The riff is read against the bar, not from its own first step, so a
+throw on an off-beat comes in partway through and the accents stay where they
+belong.
 
-**The figure belongs to the fighter.** Its length, the shape of its walk
-through the scale, where its notes fall and how long each one rings are all
-hashed out of the name, so GREP throws the same phrase every time, ALEXIOS a
-different one, and a champion carries its sound into the next round along
-with its record. Nothing is stored — the same name always gives the same
-figure.
+- **The riff goes with the name.** The first time a name is seen it is given a
+  riff, and that is written down in the browser alongside the Hall. A
+  **champion carries its riff into the next round**, and one fielded from the
+  Hall comes back with it.
+- **No two fighters in a round share a riff.** If a newcomer's riff is already
+  taken, it borrows the next free one for the round and keeps its own for
+  later. A champion never moves: if a program claimed its riff first, the
+  program moves on.
+- **One riff a side at a time.** A throw from the same side takes over from
+  whatever its side was playing. The programs play high on a pair of saws held
+  legato, the sentinels an octave down on a square, clipped short, so the two
+  sides can overlap and an exchange comes out as call and response.
+- **The fighters let go on the grid.** With Sound on, a fighter about to throw
+  asks the track when the next eighth note it can reach falls, holds its
+  stance until it is time to wind up, and releases on it. Its riff is started
+  on that eighth, allowing for the audio's own delay to the speakers, so the
+  riff you hear starts with the disc you see leave the hand. The wait is never
+  more than an eighth, and it comes before the wind-up, not in the middle of
+  it. With Sound off, nobody waits.
+- **Discs in the air open the riff's filter.** Throws, blocks, rings and
+  derezzes all add heat, which drains away an eighth at a time. The riffs run
+  through a resonant lowpass set by it, so a flurry sweeps them bright and a
+  lull lets them close back down.
+- **A block answers** with a short stab of the chord, an octave down.
 
-The rhythm is deliberately not an even run of sixteenths. Attack Magazine,
-writing about how Daft Punk's parts are put together, puts the hallmark as
-almost every consecutive note having a different length, with the emphasis
-moving around the sixteenths of the bar rather than sitting on the same ones,
-and gaps left on purpose. So a figure carries three cells — where the notes
-fall, how long each rings, and where it steps to — of lengths 4, 3 and 3,
-which come back into phase only every twelve notes, and a note that has had
-room before it lands harder. None of this is anyone's melody; it is a way of
-spacing notes. Where a throw is aimed sets which register
-its run starts in, blocks answer by walking back down, and the two sides sit
-an octave apart — so what you are hearing is who is doing what.
+**Every round is dealt its own record.** A chord progression from four
+(D#m B F# C#, the walk from the QUP trailer, among them) and two basslines out
+of four: driving octaves, straight eighths, syncopated, or long notes. The
+bassline turns over to the other every eight bars, and a knockout turns it
+over early. Every fourth bar ends on a **fill** instead of running the loop
+straight through: the last beat of a riff an octave up, a beat of silence with
+the bass dropping out too, or a run down or up into the next bar.
 
-**The tempo follows the round.** Every fighter knocked out takes it up ten
-— a 3v3 runs 120 up to as much as 170 as it is worn down to a win, then drops
-back to 120 for the next round, so a round always ends faster than it began.
-A tempo change waits for the top of a bar rather than landing wherever the
-fight puts it: stepping tempo mid-phrase smears the run already playing, and
-a bar line is where a tempo change belongs.
+An earlier version had the fight write the notes, hashing a phrase out of
+every fighter's name and moving the key on every throw. It sounded like random
+beeps, because nothing ever came round twice for the ear to catch hold of. The
+riffs are written now, and the fight decides who plays which and when.
 
-The one thing that makes this music rather than clatter is that nothing plays
-when it happens. A throw lands wherever it lands, and its run is held until
-the next **beat**; a block waits for the next **half bar**. A line never
-starts in the middle of one, which is the difference between a part and a
-pile of events. The kit stays on the eighths, where it can answer off the
-beat. At 120 BPM the longest of those waits is a second, and the disc is
-still in the air either way.
+- **The rest of the fight is the kit**: a **crash** for every ring smashed
+  out from under somebody, a **ride** for every derez, and a **tom** for every
+  bounce and block. Which tom is not random. A disc falls through the kit as it
+  travels: high for the first thing it hits, middle for the second or for a
+  shield turning it away, low for the last and for its arrival back in the
+  hand. A throw off a wall, past its target, off the glass and home comes
+  out as a descending fill that follows the disc. These land on the next
+  eighth and are never dropped.
 
-A name always gives the same figure, so the ground under it moves instead:
-**every throw shifts the key a semitone**, up or down at random, never
-further than two either way, and every fourth throw drops it back to where it
-started. Blocks are played in whatever key they answer but do not move it,
-and the kit never moves at all — a drum that followed the key around would
-stop sounding like a drum.
+**A round comes in a layer at a time**: the kick, pad and closed hats on its
+first bar, the bass and open hats on its second, the riff from its third.
+Every kick pushes the pad, bass and riff down and lets them back up inside
+the beat, so they breathe with the kit instead of sitting on it.
 
-A fighter over the edge holds on until it climbs back or is finished off, and
-for as long as it does, the first note of its figure is **arpeggiated**
-underneath everything — the note, a third above it, its octave — quietly,
-once an eighth. It is the one sound in the arena that is held rather than
-struck, so it reads as somebody still out there.
+**The tempo follows the round.** Every fighter knocked out takes it up ten. A
+3v3 runs 120 up to as much as 170 as it is worn down to a win, then drops back
+to 120 for the next round, so a round always ends faster than it began. A
+tempo change waits for the top of a bar.
 
-Nothing is composed and nothing is sampled: oscillators, one buffer of noise,
-and a scheduler running off the audio clock. A 3v3 with three exchanges in
-the air sounds like a busier bar than a duel does, which is the point.
+**The last stand builds.** When a side is down to its last fighter, or
+anybody is hanging off a ring edge (the only last stand a duel has), the pad
+opens up and the riff's filter stops closing all the way. For as long as
+anybody is hanging on, the chord is arpeggiated high and quietly once an
+eighth. It is the one sound in the arena that is held rather than struck,
+so it reads as somebody still out there. When the round is decided the riff
+and chords stop dead and a low root is left ringing under the kit.
 
-Off until you ask for it — browsers require a click before any audio, and a
-page that made noise on open would deserve to be closed.
+The chord walk and the pad come from the lo-fi bed made for the QUP trailer,
+moved from A minor at 92 BPM into this key and onto this grid.
+
+Nothing is sampled: oscillators, one buffer of noise, and a scheduler running
+off the audio clock. Off until you ask for it -- browsers require a click
+before any audio, and a page that made noise on open would deserve to be
+closed.
 
 ## Names, records, and the champion
 

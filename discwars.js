@@ -1408,18 +1408,53 @@
   }
 
   // Wind up and release; `launch` gets the release point.
+  //
+  // With the music on, the release waits for the grid. The soundtrack is
+  // asked when the first eighth note the wind-up can reach falls, and the
+  // fighter holds its stance until it is time to start winding up, so the
+  // disc leaves the hand on that eighth and the chord you hear is the throw
+  // you see. The wait is never more than an eighth, and it comes before the
+  // wind-up rather than in the middle of it -- a held stance reads as
+  // somebody choosing their moment, a stalled arm reads as a bug.
   var lastThrow = 0;
+  var beatClock = null;            // set by the page when there is music to keep time with
   function throwFrom(p, launch) {
+    var wait = 0;
+    if (beatClock) {
+      var wind = releaseTime() / pace;             // the wind-up, in real seconds
+      var due = beatClock(wind, fs[p].team, fs[p].name, !!fs[p].champion);
+      if (due > wind) wait = (due - wind) * pace;  // back into fight seconds
+    }
+    // Spoken for from here until the disc leaves the hand. It looks free the
+    // whole time -- standing, disc on its back or in its hand -- and another
+    // exchange used to hand it a second throw: a clash picks its partner by
+    // exactly that test. The second wind-up then pulled the first disc back
+    // to the hand wherever it was, which is a disc vanishing halfway across
+    // the gap, and an arm swinging with nothing in it. The wait for the beat
+    // made the window wider; it was there before, for the length of a
+    // wind-up.
+    fs[p].primed = true;
+    if (wait <= 0) { windUp(p, launch); return; }
+    after(wait, function () {
+      if (canAct(p)) { windUp(p, launch); return; }
+      fs[p].primed = false;
+      ds[p].state = "back";                           // knocked out of it while waiting
+      after(0.4, function () { rally(p); });
+    });
+  }
+
+  function windUp(p, launch) {
     lastThrow = wall;
     ds[p].bounces = 0;                             // a new journey through the kit
     play(p, "throw", throwSpeed);
     after(0.12, function () { ds[p].state = "hand"; });
     after(releaseTime(), function () {
+      fs[p].primed = false;                           // let go, or lost it: free again either way
       if (canAct(p)) {
         launch(handWorld(p));                 // a body shot picks its aim in here
         fs[p].stats.throws++;
         emit("throw", { team: fs[p].team, aim: fs[p].lastThrowAim, name: fs[p].name,
-                        lead: speaks(p) });
+                        lead: speaks(p), champion: !!fs[p].champion });
         return;
       }
       ds[p].state = "back";                           // lost its footing mid-throw
@@ -1701,7 +1736,7 @@
   function ready(team) {
     var out = [];
     for (var i = 0; i < fs.length; i++)
-      if (fs[i].team === team && alive(i) && canAct(i) && discHome(i) && !fs[i].move) out.push(i);
+      if (fs[i].team === team && alive(i) && canAct(i) && discHome(i) && !fs[i].move && !fs[i].primed) out.push(i);
     return out;
   }
 
@@ -1725,7 +1760,7 @@
     var q = pickFoe(p);
     if (q < 0) return;                             // nobody left to throw at
     fs[p].foe = q;
-    if (!canAct(p) || !discHome(p)) {
+    if (!canAct(p) || !discHome(p) || fs[p].primed) {
       // It cannot throw just now -- mid-flip, still waiting on its disc.
       // Rather than making the exchange queue behind it, give it to somebody
       // who can: its own side first, since the fight should keep swinging
@@ -1752,7 +1787,7 @@
         return;
       }
     }
-    if (canAct(q) && discHome(q) && Math.random() < 0.15) { clash(p, q); return; }
+    if (canAct(q) && discHome(q) && !fs[q].primed && Math.random() < 0.15) { clash(p, q); return; }
     if (Math.random() < 0.12) {
       // Bank one off the ceiling: at the ring it stands on, or another. Late
       // in a round every other ring under a fighter can be broken, and then
@@ -1919,6 +1954,7 @@
       f.move = null; f.clingRing = -1; f.willClimb = false; f.foe = -1;
       f.blockTarget = 0; f.block = 0;
       f.plan = null;                               // nothing half-played carries over
+      f.primed = false;                            // nor a throw half thrown
       f.spared = false;                            // the free hit comes back each round
       setMode(i, "rez");
       f.yOff = 0; f.alpha = 0;
@@ -2144,6 +2180,9 @@
     setPaused: setPaused,
     // Listen to the fight: ("throw"|"block", { team, aim }).
     on: function (fn) { if (typeof fn === "function") listeners.push(fn); },
+    // Something to keep time with: fn(windUp, team, name, champion) -> real seconds from now
+    // until the release, or null for none. See throwFrom.
+    setBeatClock: function (fn) { beatClock = typeof fn === "function" ? fn : null; },
     // 1 for the duel, 2 or 3 for a team match. Restarts the fight.
     setTeams: function (n) {
       buildMatch(n);

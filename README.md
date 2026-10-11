@@ -245,16 +245,23 @@ standing on the winning side with the most points for the round chooses.
   a later win. Squares lost stay lost from one round to the next. It guards the
   chest, so a disc banked off the ceiling at the rings is nothing to do with it,
   and the Bit's YES stops on a square like any other hit.
-- **Power of Flynn.** When a comrade is knocked out, there is a 5 in 100 chance
-  it comes back: it rezzes in again on its own platform (or an empty one), with
-  every ring there back up. The knockout still counts to whoever made it. The
-  champion has to be standing for it, and it is not offered to a side of one.
-- **General Tesler Arm.** One attack in 30, the champion launches its hand
-  instead of its disc. The hand goes at half a disc's speed, jagging like a
-  lightning bolt on its way to the target, and lays a light-cycle wall behind
-  it all the way out and all the way back; the wall stays until the hand is
-  home. A hand lands twice as often as a disc and is stopped half as
-  often, and it neither breaks discs nor is broken by them.
+- **Power of Flynn.** When a comrade is knocked out, there is a 1 in 5 chance
+  the champion calls on it. As soon as it is standing free (not hanging off an
+  edge, not mid-throw) it goes down on one knee and puts a hand flat to the
+  floor, and for five seconds nobody in the arena throws; discs already in the
+  air finish their flight. The champion and every ring on its side glow while
+  it kneels. Then its side's rings all rise again and every fallen comrade
+  rezzes back in on its platform (or an empty one), the way a new round brings
+  them back. The knockouts still count to whoever made them. It is not offered
+  to a side of one.
+- **General Tesler Arm.** About one attack in 23, the champion launches its
+  hand instead of its disc. The hand goes at a sixth of a disc's speed, jagging
+  like a lightning bolt on its way to the target, and lays a light-cycle wall
+  behind it all the way out and all the way back; the wall stays until the
+  hand is home. A hand lands twice as often as a disc and is stopped half as
+  often, and it neither breaks discs nor is broken by them. With its hand out
+  the champion has no disc to guard with, so while the hand is in flight a
+  throw that gets past it lands half as often.
 - **MCP Absorb.** Every enemy that goes down while the champion is standing,
   the champion takes in what it knew: the moves it had named and what its fly
   had learned, the way a champion takes in its own side's at the end of a

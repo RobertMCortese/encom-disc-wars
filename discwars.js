@@ -506,6 +506,7 @@
       for (var k = 0; k < ringCount; k++)
         ringRadii[k].forEach(function (r) { if (r > 0) ringCircles.push([g, k, r]); });
     queue = []; wallQueue = []; pieces = []; bugs = []; motes = [];
+    rite = null;
     score = [0, 0]; banner = "";
     if (choosing) { choosing = null; emit("choose", null); }   // the fighter it was for is gone
     startBrains();                       // a different match is a different game
@@ -717,6 +718,14 @@
       if (eu >= 1) setMode(p, "stand");
     }
 
+    if (f.mode === "kneel") {
+      // Down onto one knee, a hand to the floor, held, and back up at the end.
+      var kin = f.mt / 0.7, kout = (KNEEL_TIME - f.mt) / 0.7;
+      var kw = ease(Math.max(0, Math.min(1, kin, kout)));
+      var kt = evadePose("kneel", pose, 0);
+      for (var kj = 0; kj < pose.length; kj++) pose[kj] += (kt[kj] - pose[kj]) * kw;
+    }
+
     if (f.mode === "drop" || f.mode === "cling" || f.mode === "fall" || f.mode === "climb") {
       // Hanging by both hands from the ring edge, legs loose; a climb lets
       // go of the pose as it comes up over the edge.
@@ -780,6 +789,12 @@
            P(0.12, 1.45, 0), P(0.15, 1.58, 0), P(0.18, 1.78, 0),
            P(0.12, 1.48, -0.18), P(0.2, 1.3, -0.45), P(0.28, 1.12, -0.7), P(0.32, 1.06, -0.8),
            P(0.12, 1.48, 0.18), P(0.2, 1.3, 0.45), P(0.28, 1.12, 0.7), P(0.32, 1.06, 0.8)];
+    } else if (kind === "kneel") {                    // one knee down, leaning in, a hand flat on the floor
+      J = [P(0, 0.45, 0), P(0, 0.45, -0.1), P(0.42, 0.46, -0.14), P(0.44, 0.05, -0.16), P(0.6, 0, -0.16),
+           P(0, 0.45, 0.1), P(0.1, 0.03, 0.14), P(-0.32, 0.04, 0.15), P(-0.44, 0, 0.15),
+           P(0.36, 0.67, 0), P(0.45, 0.78, 0), P(0.6, 0.9, 0),
+           P(0.36, 0.7, -0.17), P(0.38, 0.42, -0.22), P(0.62, 0.44, -0.16), P(0.7, 0.43, -0.15),
+           P(0.36, 0.7, 0.17), P(0.46, 0.42, 0.24), P(0.52, 0.12, 0.27), P(0.56, 0.02, 0.28)];
     } else {                                          // hit: thrown back, arms flung wide
       J = [P(-0.12, 0.92, 0), P(-0.12, 0.92, -0.1), P(0.05, 0.5, -0.14), P(0.1, 0.08, -0.16), P(0.25, 0, -0.17),
            P(-0.12, 0.92, 0.1), P(-0.05, 0.5, 0.14), P(-0.1, 0.08, 0.16), P(0.05, 0, 0.17),
@@ -962,6 +977,10 @@
       f.yOff = Math.min(0, hangOffset(p)) - 4.9 * f.mt * f.mt;
       f.alpha = Math.max(0, 1 - f.mt / 0.9);
       if (f.mt > 0.9) { spark([f.pos[0], f.yOff + 1, f.pos[1]], "#ffffff"); setMode(p, "gone"); }
+    } else if (f.mode === "kneel") {
+      f.yOff = 0; f.alpha = 1;
+      if (f.mt >= KNEEL_TIME && rite && rite.p === p) riteDone();
+      else if (f.mt >= KNEEL_TIME) setMode(p, "stand");
     } else if (f.mode === "bugged") {
       f.yOff = 0; f.alpha = 1;
       if (f.mt >= BUG_HOLD) setMode(p, "stand");    // shaken off at last
@@ -1063,7 +1082,14 @@
     }
     return pts;
   }
-  var ARM_SLOW = 2;                                // a hand takes twice as long as a disc
+  var ARM_SLOW = 6;                                // a hand takes six times as long as a disc
+  // While its hand is out a fighter has no disc to guard with, and the hand
+  // is out a long time, so a throw that gets through lands half as often.
+  var ARM_OUT_HARD = 0.5;
+  function armOut(p) {
+    var f = fs[p];
+    return (ds[p].arm && ds[p].state === "flight") || !!(f.spare && f.spare.arm && f.spare.state === "flight");
+  }
 
   // Which wall a throw might go off, or null for straight at them.
   function pickWall() {
@@ -1548,6 +1574,7 @@
     fs[p].primed = true;
     if (wait <= 0) { windUp(p, launch); return; }
     after(wait, function () {
+      if (kneeling()) { fs[p].primed = false; ds[p].state = "back"; return; }   // held for the rite
       if (canAct(p)) { windUp(p, launch); return; }
       fs[p].primed = false;
       ds[p].state = "back";                           // knocked out of it while waiting
@@ -1771,6 +1798,7 @@
 
       var know = fs[p].practised;
       var hard = fs[q].champion ? CHAMP.tough : 1;          // champions are harder to catch
+      if (armOut(q)) hard *= ARM_OUT_HARD;                  // and harder still with the hand out
       var land = CONNECT * hard * (byHand ? 2 : 1);              // a hand lands twice as often
       if (call.through && (yes || Math.random() < land + edge(know && know.used, 0.18))) {
         // It found its mark: knocked back a ring and stunned, or derezzed.
@@ -1927,6 +1955,7 @@
 
   function startChain() {
     if (choosing) return false;                    // a winner is still choosing its power
+    if (kneeling()) return false;                  // nobody throws while Flynn's power is called on
     var idle = ready(0).concat(ready(1));
     if (!idle.length) return false;
     rally(idle[Math.floor(Math.random() * idle.length)]);
@@ -1935,6 +1964,9 @@
 
   // p's turn to attack.
   function rally(p) {
+    // While somebody kneels for Power of Flynn the exchange is let go; the
+    // arena starts new ones by itself once it is over.
+    if (kneeling()) return;
     if (!alive(p)) {
       // Whoever was carrying this exchange is gone; hand it to a teammate.
       var mates = [];
@@ -2018,9 +2050,9 @@
     shield: { name: "MCP SHIELD",
               text: "Eight squares turn slowly around it. Each stops one hit and is gone; the shield is spent with the last." },
     flynn: { name: "POWER OF FLYNN",
-             text: "5 in 100: a comrade knocked out comes back." },
+             text: "1 in 5 when a comrade is knocked out: it kneels, hand to the floor, and nobody throws. Five seconds on, its side's rings rise and every fallen comrade rezzes back in." },
     arm: { name: "TESLER ARM",
-           text: "1 in 30 attacks it launches its hand, trailing a light wall. Lands twice as often, stopped half as often." },
+           text: "About 1 in 23 attacks it launches its hand, slowly, trailing a light wall. Lands twice as often, stopped half as often, and it is hit half as often while the hand is out." },
     absorb: { name: "MCP ABSORB",
               text: "Every enemy that goes down, it takes in that enemy's moves and what its fly learned." },
     bugs: { name: "GRID BUGS",
@@ -2030,7 +2062,8 @@
   var BUG_CHANCE = 1 / 40, BUG_COUNT = 5, BUG_HOLD = 10, BUG_SPEED = 3.4;   // metres a second
   var BUG_EYE = "#b84dff", BUG_GREEN = "#4dff5e";
   var BREAK_CHANCE = 0.1, BIT_CHANCE = 0.1;
-  var FLYNN_CHANCE = 0.05, ARM_CHANCE = 1 / 30;
+  var FLYNN_CHANCE = 0.2, ARM_CHANCE = 1.3 / 30;
+  var KNEEL_TIME = 5;                              // real seconds on one knee for Power of Flynn
   var SHIELD_SQUARES = 8, SHIELD_R = 0.75, SHIELD_SIDE = 0.5, SHIELD_SPIN = 0.5;   // radians a second
   var BIT_REST = "#4fc3ff", BIT_YES = "#ffd60a", BIT_NO = "#ff3b30";
   var choosing = null;                             // { p, options } while a winner chooses
@@ -2168,22 +2201,54 @@
     }
   }
 
-  // Power of Flynn. A comrade knocked out comes back, now and then, if a
-  // fighter with the power is still standing on its side: it rezzes in on
-  // its own platform -- or an empty one, if a teammate has moved onto its
-  // own -- with every ring there back up. The knockout still counts.
-  function comeBack(p, settle) {
-    afterWall(settle + 0.6, function () {
-      if (alive(p) || !liveCount(fs[p].team)) return;
-      var pad = fs[p].home;
+  // Power of Flynn. When a comrade is knocked out, now and then, the fighter
+  // with the power goes down on one knee and puts its hand to the floor. It
+  // waits until it is standing free to do it -- not hanging off an edge, not
+  // mid-throw. For the five seconds it kneels nobody throws, and it and its
+  // side's rings glow; then its side's rings rise and every fallen comrade
+  // rezzes back in, the way a new round brings them back. Knockouts still
+  // count to whoever made them.
+  var rite = null;                                 // { p, team, phase: "wait" | "kneel" }
+  function kneeling() { return !!rite && rite.phase === "kneel"; }
+  function riteGlow() {
+    if (!kneeling()) return 0;
+    return Math.min(1, fs[rite.p].mt / 0.6) * (0.7 + 0.3 * Math.sin(wall * 5));
+  }
+  function stepRite() {
+    if (!rite) return;
+    var p = rite.p, f = fs[p];
+    if (!f || !alive(p)) { rite = null; return; }   // gone before it could kneel, or while it did
+    if (rite.phase === "kneel") {
+      // A disc already in the air when it went down can still change what
+      // it is doing -- the Bit's YES does not miss. Whatever took it off its
+      // knee, the rite is broken and the fight must not wait on it.
+      if (f.mode !== "kneel") rite = null;
+      return;
+    }
+    if (!canAct(p) || f.move || f.primed || f.clip === "throw") return;
+    rite.phase = "kneel";
+    f.blockTarget = 0;
+    if (ds[p].state === "shield") ds[p].state = "back";
+    play(p, "idle");
+    setMode(p, "kneel");
+    emit("flynnkneel", { team: f.team, name: f.name });
+  }
+  function riteDone() {
+    var r = rite;
+    rite = null;
+    setMode(r.p, "stand");
+    for (var g = 0; g < pads.length; g++) if (pads[g].team === r.team) restoreRings(g);
+    for (var i = 0; i < fs.length; i++) {
+      if (fs[i].team !== r.team || alive(i)) continue;
+      var pad = fs[i].home;
       if (occupied(pad)) {
-        for (var i = 0; i < pads.length; i++) if (pads[i].team === fs[p].team && !occupied(i)) { pad = i; break; }
+        for (var k = 0; k < pads.length; k++) if (pads[k].team === r.team && !occupied(k)) { pad = k; break; }
       }
-      restoreRings(pad);
-      resetFighter(p, pad);
+      if (occupied(pad)) continue;                 // nowhere to stand
+      resetFighter(i, pad);
       spark([pads[pad].cx, 1.2, pads[pad].cz], "#ffffff");
-      emit("flynn", { team: fs[p].team, name: fs[p].name });
-    });
+    }
+    emit("flynn", { team: r.team, name: fs[r.p].name });
   }
 
   // MCP Absorb. Every enemy that goes down, the fighter with it takes in:
@@ -2484,7 +2549,7 @@
     // Power of Flynn: one roll, if anybody standing on its side has it.
     for (var fl = 0; fl < fs.length; fl++) {
       if (fl === p || fs[fl].team !== fs[p].team || !alive(fl) || !has(fl, "flynn")) continue;
-      if (Math.random() < FLYNN_CHANCE) comeBack(p, settle);
+      if (!rite && Math.random() < FLYNN_CHANCE) rite = { p: fl, team: fs[p].team, phase: "wait" };
       break;
     }
     // MCP Absorb: every enemy standing with it takes in what this one knew.
@@ -2625,6 +2690,7 @@
     for (var i = 0; i < fs.length; i++) resetFighter(i, fs[i].home);
     // Anything still queued belongs to the round that just ended.
     queue = []; wallQueue = []; bugs = [];
+    rite = null;                                   // resetFighter has stood everybody back up
     banner = "";
     // The winner chooses a power before anybody throws. The arena waits for
     // the choice -- the fighters stand rezzed in, ready -- however long it
@@ -2689,6 +2755,7 @@
         else if (r.s === "falling" && wall - r.t > back) rs[k] = { s: "rising", t: wall };
       });
     });
+    stepRite();
     // Keep as many exchanges going as the match should have.
     if (wall - lastChainCheck > 0.4) {
       lastChainCheck = wall;
@@ -2727,9 +2794,14 @@
       }
       var outer = cc[2] === ringRadii[cc[1]][1];
       var col = pads[cc[0]].team === 0 ? program : sentinel;
+      // The side whose champion kneels for Power of Flynn: every ring lit.
+      var rg = kneeling() && pads[cc[0]].team === rite.team ? riteGlow() : 0;
+      var rhi = pads[cc[0]].team === 0 ? programHi : sentinelHi;
       for (var sg = 0; sg < ringSegs; sg++) {
-        seg(1000 - (pts[sg][2] + pts[sg + 1][2]) * 10 - 1, pts[sg], pts[sg + 1],
-            outer ? 2 : 1.2, col, look[1] * (outer ? 0.95 : 0.55));
+        var rz = 1000 - (pts[sg][2] + pts[sg + 1][2]) * 10 - 1;
+        if (rg) seg(rz - 0.5, pts[sg], pts[sg + 1], outer ? 9 : 6, rhi, look[1] * 0.22 * rg, "round");
+        seg(rz, pts[sg], pts[sg + 1],
+            outer ? 2 : 1.2, rg ? rhi : col, look[1] * (outer ? 0.95 : 0.55 + 0.4 * rg));
       }
     }
 
@@ -2742,14 +2814,23 @@
       var S = [];
       for (var j = 0; j < 20; j++) S.push(project(toWorld(p, local, j)));
       // With its hand launched, the arm ends at the wrist.
-      var handOut = (ds[p].arm && ds[p].state === "flight") || !!(f.spare && f.spare.arm && f.spare.state === "flight");
+      var handOut = armOut(p);
+      // Kneeling for Power of Flynn: a glow all round the figure.
+      var fg = kneeling() && rite.p === p ? riteGlow() : 0;
+      var fhi = f.team === 0 ? programHi : sentinelHi;
       for (var k = 0; k < limbs.length; k++) {
         if (handOut && limbs[k][1] === 19) continue;
         var lb = limbs[k], a1 = S[lb[0]], b1 = S[lb[1]], depth = (a1[2] + b1[2]) / 2;
-        limb(1000 - depth * 20, a1, b1, Math.max(2, lb[2] * cam.F / depth), col, alpha);
+        var lw = Math.max(2, lb[2] * cam.F / depth);
+        if (fg) {
+          seg(1000 - depth * 20 - 0.6, a1, b1, lw + 14, fhi, 0.12 * fg * alpha, "round");
+          seg(1000 - depth * 20 - 0.5, a1, b1, lw + 6, fhi, 0.3 * fg * alpha, "round");
+        }
+        limb(1000 - depth * 20, a1, b1, lw, fg ? fhi : col, alpha);
       }
       var hc = project(lerp3(toWorld(p, local, 10), toWorld(p, local, 11), 0.55));
       var hs = 0.24 * cam.F / hc[2];
+      if (fg) seg(1000 - hc[2] * 20 + 0.5, [hc[0] - 0.5, hc[1]], [hc[0] + 0.5, hc[1]], hs * 1.9, fhi, 0.22 * fg * alpha, "round");
       var hd = put("head", 1000 - hc[2] * 20 + 1);
       hd.x = hc[0] - hs / 2; hd.y = hc[1] - hs * 0.56;
       hd.w = hs; hd.h = hs * 1.12; hd.c = col; hd.o = alpha;

@@ -121,23 +121,23 @@ riffs are written now, and the fight decides who plays which and when.
   out as a descending fill that follows the disc. These land on the next
   eighth and are never dropped.
 
-**A round comes in a layer at a time**: the kick, pad and closed hats on its
-first bar, the bass and open hats on its second, the riff from its third.
-Every kick pushes the pad, bass and riff down and lets them back up inside
-the beat, so they breathe with the kit instead of sitting on it.
-
-**The tempo follows the round.** Every fighter knocked out takes it up ten. A
-3v3 runs 120 up to as much as 170 as it is worn down to a win, then drops back
-to 120 for the next round, so a round always ends faster than it began. A
-tempo change waits for the top of a bar.
+**The record never stops.** When Sound comes on it comes in a layer at a
+time: the kick, pad and closed hats on the first bar, the bass and open hats
+on the second. After that the groove runs straight through every round,
+every knockout and every respawn, at a steady **120 BPM**. Only the fighters'
+riffs stop when a round is decided. A new round's progression and basslines
+wait for the next chord change and start there, from the top, so the bass and
+pad never disagree about which chord they are on. Every kick pushes the pad,
+bass and riffs down and lets them back up inside the beat, so they breathe
+with the kit instead of sitting on it.
 
 **The last stand builds.** When a side is down to its last fighter, or
 anybody is hanging off a ring edge (the only last stand a duel has), the pad
 opens up and the riff's filter stops closing all the way. For as long as
 anybody is hanging on, the chord is arpeggiated high and quietly once an
 eighth. It is the one sound in the arena that is held rather than struck,
-so it reads as somebody still out there. When the round is decided the riff
-and chords stop dead and a low root is left ringing under the kit.
+so it reads as somebody still out there. When the round is decided the
+riffs stop dead and the groove carries on underneath.
 
 The chord walk and the pad come from the lo-fi bed made for the QUP trailer,
 moved from A minor at 92 BPM into this key and onto this grid.
@@ -207,6 +207,66 @@ count on the scoreboard.
 Everyone else is a new program with nothing to its name. The champion is the
 only thing in the arena that accumulates, and the only one with anything to
 lose.
+
+## Powers
+
+**Every round won is a power.** When a round is decided, the champion it
+crowns chooses one power it does not have yet, and the arena waits, with the
+fighters rezzed in, until the choice is made. Powers stay with the champion for
+as long as it holds the title, are kept with it in the Hall, and come back with
+it when it is fielded from there. In a match from the Hall, the champion
+standing on the winning side with the most points for the round chooses.
+
+- **Dual Wield.** When a comrade falls, the champion takes up its disc and
+  carries it in the other hand. With two discs it does not wait for one to come
+  back before throwing the other, so it throws twice as often. It needs a
+  comrade to fall, so it is not offered to a side of one.
+- **Disc Break.** Whenever the champion's disc meets another disc (a block, a
+  catch overhead, two discs clashing in the air), there is a 1 in 10 chance
+  the other disc shatters. A fighter with a broken disc cannot throw or block
+  for the rest of the round; it can only get out of the way. The broken disc
+  flies apart: its rim and its bright core in shards that tumble to the floor.
+- **Bit.** A small polyhedron keeps station behind the champion's shoulder.
+  At rest it never settles: an icosahedron, then a dodecahedron, then an
+  icosahedron again, shifting every half second. Every exchange the
+  champion is part of, the Bit acts one time in ten, and then it is a coin:
+  **YES** (a yellow octahedron) is a hit that always lands and always
+  derezzes, champion's spared hit or not; **NO** (a red star, every face drawn
+  out to a spike) stops the disc dead in front of it. A YES that comes up
+  while the champion is being thrown at, or a NO while it is throwing, has
+  nothing to do yet, so the Bit holds it for the next exchange where it does.
+  With Sound on, it says so: "Yes" or "No", in the browser's own speech voice,
+  pitched down.
+- **MCP Shield.** Eight squares stand in a ring around the champion at chest
+  height and turn slowly. A hit that would land meets whichever square is on
+  that side when the disc gets there: the square breaks apart and the disc
+  goes home, and from then on a disc from that side goes through the gap. The
+  shield is used up with its last square, and the power can be chosen again on
+  a later win. Squares lost stay lost from one round to the next. It guards the
+  chest, so a disc banked off the ceiling at the rings is nothing to do with it,
+  and the Bit's YES stops on a square like any other hit.
+- **Power of Flynn.** When a comrade is knocked out, there is a 5 in 100 chance
+  it comes back: it rezzes in again on its own platform (or an empty one), with
+  every ring there back up. The knockout still counts to whoever made it. The
+  champion has to be standing for it, and it is not offered to a side of one.
+- **General Tesler Arm.** One attack in 30, the champion launches its hand
+  instead of its disc. The hand goes at half a disc's speed, jagging like a
+  lightning bolt on its way to the target, and lays a light-cycle wall behind
+  it all the way out and all the way back; the wall stays until the hand is
+  home. A hand lands twice as often as a disc and is stopped half as
+  often, and it neither breaks discs nor is broken by them.
+- **MCP Absorb.** Every enemy that goes down while the champion is standing,
+  the champion takes in what it knew: the moves it had named and what its fly
+  had learned, the way a champion takes in its own side's at the end of a
+  round. The enemy does not fall or break up: it comes apart into motes of
+  light where it stood, and they stream across to the champion one after
+  another.
+- **Grid Bugs.** One attack in 40, five grid bugs rise out of the floor grid
+  far below the champion and scuttle across it, crab-like, to underneath one
+  opponent, then jump up onto it. It wriggles for ten seconds, swatting at
+  them, and can neither throw nor guard: every disc thrown at it gets through.
+  They drop off when the ten seconds are up, or when it falls. A grid bug is
+  green: four legs and an upside-down triangle of a head with a purple eye.
 
 ## The fighters learn
 

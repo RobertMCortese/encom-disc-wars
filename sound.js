@@ -34,18 +34,16 @@
 (function () {
   "use strict";
 
+  // The tempo holds. It used to wind up ten for every fighter knocked out
+  // and drop back for the next round, which made every round a ramp and
+  // every respawn a lurch; a record that keeps its tempo is one you can
+  // settle into, and the fight has plenty of other ways to build.
   var BASE_BPM = 120;
-  var PER_LOSS = 10;               // every fighter out winds it up this much
-  var MAX_BPM = 200;
-  // The tempo is not fixed: each fighter knocked out of the round takes it up
-  // ten, and a new round drops it back. A 3v3 worn down to a win runs 120 to
-  // as much as 170, so the last exchanges are the fastest. A change waits for
-  // the top of a bar: a bar line is where a tempo change belongs.
-  var bpm = BASE_BPM, wantBpm = BASE_BPM;
+  var bpm = BASE_BPM;
   var STEP = 60 / BASE_BPM / 2;    // the grid everything snaps to: eighths
   var LOOKAHEAD = 0.12;            // seconds of audio scheduled in advance
   var TICK = 25;                   // ms between runs of the scheduler
-  var fighting = false;            // between the deciding fall and the next round
+  var fighting = false;            // false between the deciding fall and the next round
 
   var ctx = null, master = null, notes = null, comp = null, noise = null;
   var sounding = [];               // every melodic voice currently ringing
@@ -177,26 +175,30 @@
   // scheduled is otherwise beyond reach: the web audio graph will play it
   // whatever happens next, and what happens next may be that the fight it
   // belonged to ended.
-  function keep(g, os, end) {
-    sounding.push({ g: g, os: os, end: end });
+  // The pad and the bass are the groove, not the fight, and are marked so:
+  // the end of a round cuts the fighters' riffs and leaves the groove alone.
+  function keep(g, os, end, groove) {
+    sounding.push({ g: g, os: os, end: end, groove: !!groove });
     if (sounding.length > 160) {
       var now = ctx.currentTime;
       sounding = sounding.filter(function (v) { return v.end > now; });
     }
   }
 
-  // Silence, now. A round is over the moment the last of a side falls, and a
-  // riff still going over the result is a fight carrying on after it has
-  // been decided. The kit plays on: it is the clock, not the argument, and
-  // a round should not cost the track its pulse. A hit that has already
+  // The fighters' riffs stop, now. A round is over the moment the last of a
+  // side falls, and a riff still going over the result is a fight carrying
+  // on after it has been decided. Everything else plays on -- kit, hats,
+  // bass and pad are the record, not the argument, and the record does not
+  // stop for a respawn. A hit that has already
   // landed still sounds, so kit events waiting for their slot stay -- the
   // deciding derez is queued for the grid, the round ends before its slot
   // comes round, and emptying the queue here once took its cymbal with it.
   function cutAll() {
     if (!ctx) return;
-    var t = ctx.currentTime;
+    var t = ctx.currentTime, groove = [];
     for (var i = 0; i < sounding.length; i++) {
       var v = sounding[i];
+      if (v.groove) { if (v.end > t) groove.push(v); continue; }
       try {
         v.g.gain.cancelScheduledValues(t);
         v.g.gain.setValueAtTime(Math.max(0.0001, v.g.gain.value), t);
@@ -206,9 +208,9 @@
         }
       } catch (e) { /* node already finished */ }
     }
-    sounding = [];
+    sounding = groove;
     reserved = [];
-    pending = pending.filter(function (e) { return e.kind !== "stab"; });
+    pending = pending.filter(function (e) { return e.kind !== "stab" && e.kind !== "phrase"; });
   }
 
   // ── The harmony ───────────────────────────────────────────────────────
@@ -346,11 +348,14 @@
   function pick(n) { return Math.floor(Math.random() * n); }
 
   // A new round, a new hand: a progression and two basslines. The riffs
-  // are the fighters', and they keep them.
+  // are the fighters', and they keep them. The groove never stops, so a new
+  // hand is not played the moment it is dealt -- a progression swapped
+  // mid-chord would put the bass under one chord and the pad on another.
+  // It waits for the next chord change and starts there, from the top.
+  var dealt = null, progFrom = 0;
   function dealRound() {
-    prog = PROGS[pick(PROGS.length)];
     var b0 = pick(BASSES.length), b1 = (b0 + 1 + pick(BASSES.length - 1)) % BASSES.length;
-    basses = [b0, b1];
+    dealt = { prog: PROGS[pick(PROGS.length)], basses: [b0, b1] };
   }
 
   // ── Whose riff is whose ───────────────────────────────────────────────
@@ -448,7 +453,7 @@
     g.gain.linearRampToValueAtTime(0.0001, t + dur + rel);
     var off = t + dur + rel + 0.03;
     for (i = 0; i < os.length; i++) { os[i].start(t); os[i].stop(off); }
-    keep(g, os, off);
+    keep(g, os, off, true);
     padFilters.push({ lp: lp, end: off });
     stats.chords++;
   }
@@ -473,7 +478,7 @@
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     var off = t + dur + 0.02;
     sq.start(t); si.start(t); sq.stop(off); si.stop(off);
-    keep(g, [sq, si], off);
+    keep(g, [sq, si], off, true);
     stats.bass++;
   }
 
@@ -571,42 +576,45 @@
     padFilters = live;
   }
 
-  // The round ends on a single low root left to ring out under the kit,
-  // the way the trailer's bed stopped. D#2: a laptop will not play D#1.
-  function tail() {
-    var t = ctx.currentTime + 0.01;
-    var o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = mtof(ROOT + 12);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.35, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.5);
-    o.connect(g); g.connect(master);
-    o.start(t); o.stop(t + 2.55);
-  }
-
-  function resetRound() {
-    bedBar = -1; chord = 0; variation = 0;
+  // What belongs to one round of the fight: who is playing what, how hot it
+  // is, whether it is a last stand. The groove's own place in the record --
+  // which bar, which chord -- carries straight on.
+  function resetFight() {
     phrases = [null, null]; claimed = {};
+    heat = 0; lastStand = false; onEdge = {}; reserved = [];
+    if (ctx) setBuild(false, ctx.currentTime);
     dealRound();
-    heat = 0; lastStand = false; building = false;
-    onEdge = {}; padFilters = []; reserved = [];
   }
 
-  // Once an eighth, from the clock. The round comes in a layer at a time:
-  // the pad and closed hats on its first bar, the bass and the open hats on
-  // its second. Over that, whatever riffs the fighters' throws have started.
+  // Only when Sound is switched on: the record from the top.
+  function resetRecord() {
+    bedBar = -1; chord = 0; variation = 0; progFrom = 0;
+    building = false; padFilters = [];
+    dealRound();
+    prog = dealt.prog; basses = dealt.basses; dealt = null;
+    resetFight();
+    dealt = null;                                  // the first hand is already in play
+  }
+
+  // Once an eighth, from the clock, whether or not anybody is fighting.
+  // When Sound comes on the record comes in a layer at a time: the pad and
+  // closed hats on its first bar, the bass and the open hats on its second.
+  // After that it runs, through rounds and respawns alike, and whatever
+  // riffs the fighters' throws start are played over it.
   function arrange(t, eighth, n) {
-    if (!fighting) return;
     heat *= HEAT_DECAY;
     var edge = Object.keys(onEdge).length > 0;
-    setBuild(lastStand || edge, t);
+    setBuild(fighting && (lastStand || edge), t);
     if (eighth === 0) {
       bedBar++;
       if (bedBar > 1 && (bedBar - 1) % 8 === 0) variation++;   // the other bassline
       if (bedBar % 4 === 3) fill = pick(FILLS.length);
       if (bedBar % BARS_PER_CHORD === 0) {
-        chord = (bedBar / BARS_PER_CHORD) % prog.length;
+        if (dealt) {                               // a new round's hand, from its first chord
+          prog = dealt.prog; basses = dealt.basses; dealt = null;
+          progFrom = bedBar; variation = 0;
+        }
+        chord = ((bedBar - progFrom) / BARS_PER_CHORD) % prog.length;
         padChord(t, STEP * 8 * BARS_PER_CHORD);
       }
     }
@@ -658,13 +666,9 @@
     var now = ctx.currentTime;
     while (stepTime < now + LOOKAHEAD) {
       var eighth = step % 8;                       // eight eighths to the bar
-      if (eighth === 0 && wantBpm !== bpm) {       // tempo moves on the bar line
-        bpm = wantBpm;
-        STEP = 60 / bpm / 2;
-      }
       if (eighth % 2 === 0) {
         kick(stepTime);                            // every beat: the pulse
-        if (fighting) duck(stepTime);
+        duck(stepTime);
         var b = eighth / 2;
         if (b === 1 || b === 3) snare(stepTime);   // two and four
       }
@@ -773,11 +777,11 @@
       }
       wake();
       step = 0;
-      bpm = wantBpm = BASE_BPM;
+      bpm = BASE_BPM;
       STEP = 60 / bpm / 2;
       stepTime = ctx.currentTime + 0.08;
       pending = [];
-      resetRound();
+      resetRecord();
       fighting = true;              // the first round counts too
       running = true;
       watchForPermission();
@@ -816,16 +820,14 @@
     },
 
     // What the fight has done to the shape of the round, rather than a note:
-    // a fighter out winds the tempo up and turns the bassline over, a side down
-    // to its last fighter is a last stand, a new round puts it all back.
+    // a fighter out turns the bassline over, and a side down to its last
+    // fighter is a last stand.
     mark: function (kind, info) {
       if (kind === "out") {
-        wantBpm = Math.min(MAX_BPM, wantBpm + PER_LOSS);
         variation++;                               // the other bassline, now
         heat = Math.min(1, heat + 0.3);
         if (info && info.left === 1) lastStand = true;
       }
-      else if (kind === "round") wantBpm = BASE_BPM;
     },
 
     // Called by the fight.
@@ -833,12 +835,10 @@
       if (!running || !ctx) return;
       var team = (info && info.team) || 0;
       if (kind === "over") {                       // the last of a side is down
-        var was = fighting;
-        fighting = false; cutAll(); resetRound();
-        if (was) tail();
+        fighting = false; cutAll(); resetFight();
         return;
       }
-      if (kind === "round") { resetRound(); fighting = true; return; }
+      if (kind === "round") { resetFight(); fighting = true; return; }
       if (kind === "hang") { if (fighting) onEdge[info.name] = true; return; }
       if (kind === "unhang") { delete onEdge[info.name]; return; }
       if (!fighting && (kind === "throw" || kind === "block")) return;

@@ -445,6 +445,9 @@
              // What has worked: pairs of throws that ended with a kill, and
              // the second half of one part-way through being played again.
              combos: [], plan: null, prevAim: -1, practised: null, spared: false,
+             // What it has won: powers, chosen one per round it wins.
+             powers: [], spare: null, bitHold: null, bitShow: null, bitAt: null,
+             shield: null,
              // A fruit fly's mushroom body, never yet given dopamine.
              brain: freshBrain() };
   }
@@ -502,8 +505,9 @@
     for (var g = 0; g < pads.length; g++)
       for (var k = 0; k < ringCount; k++)
         ringRadii[k].forEach(function (r) { if (r > 0) ringCircles.push([g, k, r]); });
-    queue = []; wallQueue = []; pieces = [];
+    queue = []; wallQueue = []; pieces = []; bugs = []; motes = [];
     score = [0, 0]; banner = "";
+    if (choosing) { choosing = null; emit("choose", null); }   // the fighter it was for is gone
     startBrains();                       // a different match is a different game
     sparkData = [null, null, null, null];
     rebuildLines();
@@ -524,6 +528,10 @@
       return { trig: c.trig, from: c.from, b: c.b, used: c.used | 0 || 1, name: c.name };
     });
     if (flies()) f.brain = window.FlyBrain.load(rec.brain);
+    f.powers = (rec.powers || []).filter(function (id) { return POWERS.hasOwnProperty(id); });
+    // The shield comes back with as many squares as it had left.
+    f.shield = f.powers.indexOf("shield") < 0 ? null
+             : rec.shield && rec.shield.length === SHIELD_SQUARES ? rec.shield.map(Boolean) : fullShield();
   }
 
   // What the Hall keeps of a champion. Sent out after every round it is
@@ -539,7 +547,9 @@
              combos: f.combos.map(function (c) {
                return { trig: c.trig, from: c.from, b: c.b, used: c.used, name: c.name };
              }),
-             brain: f.brain ? f.brain.save() : null };
+             brain: f.brain ? f.brain.save() : null,
+             powers: (f.powers || []).slice(),
+             shield: f.shield ? f.shield.slice() : null };
   }
   function keep(i) { var r = record(i); if (r) emit("record", r); }
 
@@ -717,6 +727,26 @@
         pull(pose, arm[2], [s0[0] + 0.06, s0[1] + 0.52, s0[2]], hw);
         pull(pose, arm[3], [s0[0] + 0.07, s0[1] + 0.62, s0[2]], hw);
       });
+    }
+
+    if (f.mode === "bugged") {
+      // Grid bugs all over it: swatting at them with both hands, twisting
+      // from the hips to shake them off, knees going.
+      var wt = wall * 11, pv0 = jp(pose, 0);
+      [[12, 13, 14, 15, 0], [16, 17, 18, 19, Math.PI]].forEach(function (arm) {
+        var sh = jp(pose, arm[0]), k = Math.sin(wt * 0.7 + arm[4]);
+        pull(pose, arm[1], [sh[0] + 0.12, sh[1] - 0.05 + 0.1 * k, sh[2]], 0.7);
+        pull(pose, arm[2], [sh[0] + 0.18, sh[1] + 0.08 + 0.22 * k, sh[2] * 0.4], 0.8);
+        pull(pose, arm[3], [sh[0] + 0.2, sh[1] + 0.16 + 0.26 * k, sh[2] * 0.15], 0.8);
+      });
+      var tw = 0.4 * Math.sin(wt), ct = Math.cos(tw), st = Math.sin(tw);
+      for (var bj = 9; bj < 20; bj++) {
+        var bx = pose[bj * 3] - pv0[0], bz = pose[bj * 3 + 2] - pv0[2];
+        pose[bj * 3] = pv0[0] + bx * ct - bz * st;
+        pose[bj * 3 + 2] = pv0[2] + bx * st + bz * ct;
+      }
+      var sag = 0.05 * Math.abs(Math.sin(wt * 0.5));
+      for (var bk = 0; bk < 20; bk++) if (bk !== 3 && bk !== 4 && bk !== 7 && bk !== 8) pose[bk * 3 + 1] -= sag;
     }
 
     f.pose = pose;
@@ -932,6 +962,9 @@
       f.yOff = Math.min(0, hangOffset(p)) - 4.9 * f.mt * f.mt;
       f.alpha = Math.max(0, 1 - f.mt / 0.9);
       if (f.mt > 0.9) { spark([f.pos[0], f.yOff + 1, f.pos[1]], "#ffffff"); setMode(p, "gone"); }
+    } else if (f.mode === "bugged") {
+      f.yOff = 0; f.alpha = 1;
+      if (f.mt >= BUG_HOLD) setMode(p, "stand");    // shaken off at last
     } else if (f.mode === "rez") {
       f.yOff = 0;
       f.alpha = Math.min(1, f.mt / 0.8);
@@ -968,7 +1001,24 @@
           : f.grip === "left" ? toWorld(p, f.pose, 15) : handWorld(p);
     return f.high ? [h[0], h[1] + 0.08, h[2]] : ahead(p, h, 0.1);
   }
-  function discHome(p) { return ds[p].state !== "flight"; }
+  function discHome(p) { return ds[p].state !== "flight" && ds[p].state !== "broken"; }
+  // A second disc, for a fighter wielding two: usable if it is not in the
+  // air and not broken.
+  function spareReady(p) {
+    var sp = fs[p].spare;
+    return !!sp && sp.state !== "flight" && sp.state !== "broken";
+  }
+  function discReady(p) { return discHome(p) || spareReady(p); }
+  // Put a disc in the throwing hand if there is one to be had: the one
+  // already there, or the spare swapped in for one that is still out.
+  function arm(p) {
+    if (discHome(p)) return true;
+    if (!spareReady(p)) return false;
+    var out = ds[p];
+    ds[p] = fs[p].spare;
+    fs[p].spare = out;
+    return true;
+  }
 
   // Which tom a carom gets. A disc falls through the kit as it travels: the
   // first thing it hits is the high tom, the second -- or a shield turning
@@ -977,8 +1027,8 @@
   // goes off a wall, past its target, off the glass and home comes out as a
   // descending fill, and the ear can follow the disc without watching it.
   var TOM_HI = 2, TOM_MID = 1, TOM_LOW = 0;
-  function bounced(p) {
-    var d = ds[p];
+  function bounced(p, disc) {
+    var d = disc || ds[p];
     d.bounces = (d.bounces || 0) + 1;
     return d.bounces === 1 ? TOM_HI : d.bounces === 2 ? TOM_MID : TOM_LOW;
   }
@@ -997,6 +1047,24 @@
     var w = [turn[0], turn[1] + lift * 0.4, viaZ];
     return [from, lerp3(from, w, 0.5), w, lerp3(w, to, 0.5), to];
   }
+  // The path of a launched hand: a lightning bolt, jagging left and right
+  // and up and down on its way to the target. Each control point sits
+  // halfway along its leg, so every leg is straight and every turn a corner.
+  function bolt(from, to) {
+    var d = sub(to, from), side = norm([-d[2], 0, d[0]]), legs = 7, pts = [from], prev = from;
+    for (var i = 1; i <= legs; i++) {
+      var v = lerp3(from, to, i / legs);
+      if (i < legs) {
+        var k = (i % 2 ? 1 : -1) * rand(0.35, 0.8);
+        v = [v[0] + side[0] * k, v[1] + rand(-0.35, 0.35), v[2] + side[2] * k];
+      }
+      pts.push(lerp3(prev, v, 0.5), v);
+      prev = v;
+    }
+    return pts;
+  }
+  var ARM_SLOW = 2;                                // a hand takes twice as long as a disc
+
   // Which wall a throw might go off, or null for straight at them.
   function pickWall() {
     return (Math.random() < 0.5 ? -1 : 1) * (arenaZ - 0.35);
@@ -1004,10 +1072,14 @@
 
   // A flight: quadratic Beziers through control points; a point may be a
   // function, so a disc flying home follows its owner's moving hand.
-  function fly(p, pts, dur, done) {
-    ds[p].state = "flight";
-    ds[p].trail = [];
-    ds[p].flight = { pts: pts, t0: now, dur: dur, done: done };
+  // `d` is which disc. A fighter wielding two has one in the air while it
+  // throws the other, so a flight cannot find its disc by asking whose it
+  // is -- it is handed the disc when it is thrown and keeps hold of it.
+  function fly(p, pts, dur, done, d) {
+    d = d || ds[p];
+    d.state = "flight";
+    if (!d.arm) d.trail = [];                      // a launched hand keeps the wall it has laid
+    d.flight = { pts: pts, t0: now, dur: dur, done: done };
   }
   function flightPoint(fl, t) {
     var pts = fl.pts.map(function (q) { return typeof q === "function" ? q() : q; });
@@ -1037,7 +1109,7 @@
     function piece(a, b, thick) {
       var mid = lerp3(a, b, 0.5), half = [(b[0] - a[0]) * 0.45, (b[1] - a[1]) * 0.45, (b[2] - a[2]) * 0.45];
       var dir = norm(sub(mid, centre)), k = rand(0.6, 2.2);
-      out.push({ mid: mid, half: half, thick: thick, col: col, born: wall,
+      out.push({ mid: mid, half: half, thick: thick, col: col, born: wall, who: p,
                  vel: [dir[0] * k + rand(-0.5, 0.5), rand(0.8, 2.8), dir[2] * k + rand(-0.5, 0.5)],
                  axis: norm([rand(-1, 1), rand(-1, 1), rand(-1, 1)]), spin: rand(-9, 9) });
     }
@@ -1054,6 +1126,39 @@
     // than replacing each other; the oldest go if there are too many.
     pieces = pieces.concat(out);
     if (pieces.length > pieceCap) pieces = pieces.slice(pieces.length - pieceCap);
+  }
+
+  // Fly apart: each [a, b] a shard, thrown out from `at` and tumbling down
+  // with the rest of the debris.
+  function burst(segs, col, at, speed, thick) {
+    segs.forEach(function (sg) {
+      var mid = lerp3(sg[0], sg[1], 0.5);
+      var half = [(sg[1][0] - sg[0][0]) * 0.5, (sg[1][1] - sg[0][1]) * 0.5, (sg[1][2] - sg[0][2]) * 0.5];
+      var dir = norm(sub(mid, at)), k = rand(speed * 0.5, speed);
+      pieces.push({ mid: mid, half: half, thick: thick || 0.035, col: col, born: wall,
+                    vel: [dir[0] * k + rand(-0.4, 0.4), dir[1] * k * 0.5 + rand(0.6, 2.4), dir[2] * k + rand(-0.4, 0.4)],
+                    axis: norm([rand(-1, 1), rand(-1, 1), rand(-1, 1)]), spin: rand(-14, 14) });
+    });
+    if (pieces.length > pieceCap) pieces = pieces.slice(pieces.length - pieceCap);
+  }
+  // A disc shattering: its rim in fourteen pieces and its bright core in
+  // six, flung out from where it broke.
+  function shatterDisc(at, col, core) {
+    var r = rand(0, Math.PI), u = [Math.cos(r), 0, Math.sin(r)];
+    var v = norm([-Math.sin(r) * 0.5, 0.86, Math.cos(r) * 0.5]);
+    function ring(rad, n) {
+      var out = [];
+      for (var i = 0; i < n; i++) {
+        var a0 = 2 * Math.PI * i / n, a1 = 2 * Math.PI * (i + 0.8) / n;
+        out.push([0, 1].map(function (j) {
+          var a = j ? a1 : a0, c = Math.cos(a) * rad, s = Math.sin(a) * rad;
+          return [at[0] + u[0] * c + v[0] * s, at[1] + u[1] * c + v[1] * s, at[2] + u[2] * c + v[2] * s];
+        }));
+      }
+      return out;
+    }
+    burst(ring(0.3, 14), col, at, 3.2, 0.04);
+    burst(ring(0.15, 6), core, at, 2.2, 0.03);
   }
 
   // Rotate v about unit axis k by angle t (Rodrigues).
@@ -1390,7 +1495,8 @@
   // Back to the hand that threw it. A throw that went off a wall on the way
   // out comes back off one too, which is what makes a wall shot read as a
   // wall shot rather than a funny-looking straight one.
-  function flyHome(p, from, viaZ) {
+  function flyHome(p, from, viaZ, d) {
+    d = d || ds[p];
     var home = function () { return handWorld(p); };
     var land = handWorld(p);
     var pts;
@@ -1402,14 +1508,15 @@
       var w = [turn[0], turn[1] + rand(0.3, 0.8), viaZ];
       pts = [from, lerp3(from, w, 0.5), w, lerp3(w, land, 0.5), home];
       after(rand(0.35, 0.5), function () {
-        if (ds[p].state === "flight") { spark(ds[p].pos, "#ffffff"); emit("bounce", { team: fs[p].team, tom: bounced(p) }); }
+        if (d.state === "flight") { spark(d.pos, "#ffffff"); emit("bounce", { team: fs[p].team, tom: bounced(p, d) }); }
       });
     }
-    fly(p, pts, viaZ == null ? rand(0.8, 1.0) : rand(1.0, 1.25), function () {
-      ds[p].state = "hand";
+    fly(p, pts, (viaZ == null ? rand(0.8, 1.0) : rand(1.0, 1.25)) * (d.arm ? ARM_SLOW : 1), function () {
+      d.state = "hand";
+      if (d.arm) { d.arm = false; d.trail = []; }   // the hand is back, and its wall goes
       emit("home", { team: fs[p].team, tom: TOM_LOW });   // back in the hand: the low one
-      after(0.3, function () { if (ds[p].state === "hand") ds[p].state = "back"; });
-    });
+      after(0.3, function () { if (d.state === "hand") d.state = "back"; });
+    }, d);
   }
 
   // Wind up and release; `launch` gets the release point.
@@ -1460,6 +1567,11 @@
         fs[p].stats.throws++;
         emit("throw", { team: fs[p].team, aim: fs[p].lastThrowAim, name: fs[p].name,
                         lead: speaks(p), champion: !!fs[p].champion });
+        // Two discs, twice the rate: with the other one in hand it does not
+        // wait for this one to come back, it goes again.
+        if (fs[p].spare) after(0.35, function () {
+          if (alive(p) && canAct(p) && !fs[p].primed && !fs[p].move && discReady(p)) rally(p);
+        });
         return;
       }
       ds[p].state = "back";                           // lost its footing mid-throw
@@ -1505,31 +1617,42 @@
     // other is still deciding whether it can climb out.
     var skill = finishing ? practisedAt(fs[p], "finish") : null;
     throwFrom(p, function (from) {
+      var disc = ds[p];
+      var yes = bitCall(p, "yes");                  // the Bit makes it land
+      var no = bitCall(q, "no");                    // the Bit stops it
       var grab = practisedAt(fs[q], "catch");
-      var caught = fs[q].mode === "stand" && canAct(q) && discHome(q) &&
+      var caught = !yes && !no && fs[q].mode === "stand" && canAct(q) && arm(q) &&
                    Math.random() < 0.4 + edge(grab && grab.used, 0.25);
       var over = ahead(q, chestWorld(q), 0.15);
-      var to = caught ? [over[0], 2.3, over[2]] : ringPoint(q, k);
+      var to = no ? bitWorld(q) : caught ? [over[0], 2.3, over[2]] : ringPoint(q, k);
       var top = [lerp3(from, to, 0.55)[0], ceilY, rand(-1.2, 1.2)];
       var dur = rand(1.15, 1.35) * (1 - edge(skill && skill.used, 0.35));
       if (caught) after(dur - 0.35, function () { if (!raiseShield(q, true)) caught = false; });
       fly(p, [from, lerp3(from, top, 0.5).map(function (v, i) { return i === 1 ? v + 0.6 : v; }), top,
               lerp3(top, to, 0.5), to], dur, function () {
-        spark(to, hot(p));
-        flyHome(p, to);
-        if (caught) {
-          learnPair(fs[q], "catch", 0, 0);         // it has taken one out of the air before
-          lowerShield(q);
+        spark(to, no ? BIT_NO : hot(p));
+        if (no) {
+          flyHome(p, to, null, disc);
           after(rand(0.3, 0.5), function () { rally(q); });
           return;
         }
+        if (caught) {
+          learnPair(fs[q], "catch", 0, 0);         // it has taken one out of the air before
+          if (maybeBreak(p, q)) breakDisc(q, to);  // caught it, and the catch shattered
+          lowerShield(q);
+          if (maybeBreak(q, p)) breakDisc(p, to, disc);
+          else flyHome(p, to, null, disc);
+          after(rand(0.3, 0.5), function () { rally(q); });
+          return;
+        }
+        flyHome(p, to, null, disc);
         breakRing(fs[q].pad, k);
         fs[p].stats.rings++;
         reward(p, "success");                      // a ring out from under somebody
         emit("ring", { team: fs[q].team });
         var f = fs[q];
         if (((f.mode === "cling" || f.mode === "climb") && k === f.clingRing) ||
-            (f.mode === "stand" && k === f.ring && !drop(q))) {
+            ((f.mode === "stand" || f.mode === "bugged") && k === f.ring && !drop(q))) {
           // Nothing left to hold on to.
           if (finishing) learnPair(fs[p], "finish", 0, 0);   // it knows how to do that now
           setMode(q, "fall");
@@ -1541,7 +1664,7 @@
         // Let a fighter who has just dropped hang there a moment.
         if (f.mode === "stand") after(rand(0.3, 0.5), function () { rally(q); });
         else afterWall(rand(1.1, 1.5), function () { rally(p); });
-      });
+      }, disc);
     });
     // Spark the ceiling as the disc caroms off it.
     after(releaseTime() + 0.47, function () {
@@ -1555,37 +1678,72 @@
   // answers with one of the three guards; if it picks the one that covers
   // that aim the disc comes off it, and if it picks wrong the disc goes
   // past -- and now and then finds its mark.
-  function bodyShot(p, q, viaZ) {
+  function bodyShot(p, q, viaZ, opts) {
     // viaZ, when given, is the side wall this one goes off on its way over.
+    // opts.arm: it is not the disc that goes, it is the hand (Tesler Arm).
+    var byHand = !!(opts && opts.arm);
+    var slow = byHand ? ARM_SLOW : 1;
+    var shape = function (a, b, lift, wz) { return byHand ? bolt(a, b) : arc(a, b, lift, wz); };
     throwFrom(p, function (from) {
+      var disc = ds[p];
+      if (byHand) { disc.arm = true; disc.trail = []; emit("arm", { team: fs[p].team, name: fs[p].name }); }
       if (viaZ != null) {
         // Spark it off the glass as it turns, the way a banked shot sparks
         // off the ceiling.
         after(releaseTime() + 0.42, function () {
-          if (ds[p].state !== "flight") return;
-          spark(ds[p].pos, "#ffffff");
-          emit("bounce", { team: fs[p].team, tom: bounced(p) });
+          if (disc.state !== "flight") return;
+          spark(disc.pos, "#ffffff");
+          emit("bounce", { team: fs[p].team, tom: bounced(p, disc) });
         });
       }
-      var canBlock = discHome(q) && canAct(q);
+      var canBlock = canAct(q) && arm(q);
       var call = readThrow(p, q, canBlock);
+      var stuck = fs[q].mode === "bugged";          // covered in grid bugs: no guard at all
+      if (stuck) call.through = true;
       var pass = HEIGHT[call.aim] + rand(-0.08, 0.08);
+
+      // The Bit, if either of them has one. NO stops the disc dead in front
+      // of its fighter whatever the guard was; YES puts it through whatever
+      // the guard was, and it lands. Both at once: NO wins, a shield being
+      // the one thing a hit cannot get past.
+      var yes = bitCall(p, "yes");
+      var no = bitCall(q, "no");
+      if (no) {
+        var at = bitWorld(q);
+        fly(p, shape(from, at, rand(0.1, 0.4), viaZ), rand(0.85, 1.05) * (viaZ == null ? 1 : 1.3) * slow, function () {
+          spark(at, BIT_NO);
+          fs[q].stats.blocks++;
+          emit("block", { team: fs[q].team, aim: call.aim, name: fs[q].name,
+                         tom: TOM_MID, lead: speaks(q) });
+          flyHome(p, at, null, disc);
+          after(rand(0.25, 0.45), function () { rally(q); });
+        }, disc);
+        return;
+      }
+      if (yes) call.through = true;
+      // A hand is half as easy to stop as a disc.
+      if (byHand && !call.through && Math.random() < 0.5) call.through = true;
 
       if (!call.through && call.guard === 1) {
         // Caught on the disc, held up across the chest.
         var to = ahead(q, chestWorld(q), 0.6);
         to[1] += 0.05;
-        var dur = rand(0.85, 1.05) * (viaZ == null ? 1 : 1.3);
+        var dur = rand(0.85, 1.05) * (viaZ == null ? 1 : 1.3) * slow;
         after(Math.max(0, dur - 0.3), function () { raiseShield(q, false); });
-        fly(p, arc(from, to, rand(0.1, 0.6), viaZ), dur, function () {
+        fly(p, shape(from, to, rand(0.1, 0.6), viaZ), dur, function () {
           spark(to, hot(p));
           fs[q].stats.blocks++;
           emit("block", { team: fs[q].team, aim: call.aim, name: fs[q].name,
                          tom: TOM_MID, lead: speaks(q) });
+          // Disc on disc: either one may come apart, if its opponent's
+          // champion has learned how to do that to a disc. A hand is not a
+          // disc, and neither breaks nor is broken.
+          if (!byHand && maybeBreak(p, q)) breakDisc(q, to);
           lowerShield(q);
-          flyHome(p, to, viaZ == null ? null : -viaZ);   // off the other wall on the way back
+          if (!byHand && maybeBreak(q, p)) breakDisc(p, to, disc);
+          else flyHome(p, to, viaZ == null ? null : -viaZ, disc);   // off the other wall on the way back
           after(rand(0.25, 0.45), function () { rally(q); });
-        });
+        }, disc);
         return;
       }
 
@@ -1597,7 +1755,7 @@
       // here before makes and a new program does not. This is the defensive
       // half of the same idea: practice changes what happens, not just what
       // is chosen.
-      if (call.through) {
+      if (call.through && !yes) {
         var hand = practisedFor(fs[q], "save", call.aim);
         if (hand && canAct(q) && Math.random() < edge(hand.used, 0.22)) {
           call.through = false;                    // saved it after all
@@ -1613,20 +1771,38 @@
 
       var know = fs[p].practised;
       var hard = fs[q].champion ? CHAMP.tough : 1;          // champions are harder to catch
-      if (call.through && Math.random() < CONNECT * hard + edge(know && know.used, 0.18)) {
+      var land = CONNECT * hard * (byHand ? 2 : 1);              // a hand lands twice as often
+      if (call.through && (yes || Math.random() < land + edge(know && know.used, 0.18))) {
         // It found its mark: knocked back a ring and stunned, or derezzed.
+        // The Bit's YES is the second: it does not knock anyone back.
         var hitAt = chestWorld(q);
-        fly(p, arc(from, hitAt, rand(0.1, 0.4), viaZ),
-            rand(0.85, 1.05) * (viaZ == null ? 1 : 1.3), function () {
-          spark(hitAt, hot(p));
+        var hdur = rand(0.85, 1.05) * (viaZ == null ? 1 : 1.3) * slow;
+        var hpts = shape(from, hitAt, rand(0.1, 0.4), viaZ);
+        // Unless a square of an MCP shield is in the way when it gets there.
+        var sq = shieldSlot(q, hpts[hpts.length - 2], hdur);
+        if (sq) {
+          fly(p, shape(from, sq.at, rand(0.1, 0.4), viaZ), hdur, function () {
+            spark(sq.at, hot(q));
+            fs[q].stats.blocks++;
+            emit("block", { team: fs[q].team, aim: call.aim, name: fs[q].name,
+                           tom: TOM_MID, lead: speaks(q) });
+            shieldHit(q, sq.slot, sq.at);
+            flyHome(p, sq.at, null, disc);
+            after(rand(0.25, 0.45), function () { rally(q); });
+          }, disc);
+          return;
+        }
+        fly(p, hpts, hdur, function () {
+          spark(hitAt, yes ? BIT_YES : hot(p));
           fs[p].stats.hits++;
-          flyHome(p, hitAt);
-          if (canAct(q) && Math.random() < 0.3) {
+          flyHome(p, hitAt, null, disc);
+          if (yes ? alive(q) : stuck ? Math.random() < 0.5 : (canAct(q) && Math.random() < 0.3)) {
             // A champion survives the first of these each round: it takes the
             // hit, is thrown back, and is still standing where anybody else
             // would have come apart. Once only, and then it is as breakable
-            // as the rest of them.
-            if (CHAMP.spared && fs[q].champion && !fs[q].spared) {
+            // as the rest of them -- and never against the Bit, which does
+            // not miss and does not leave anyone standing.
+            if (!yes && CHAMP.spared && fs[q].champion && !fs[q].spared) {
               fs[q].spared = true;
               spark(hitAt, "#ffffff");
               emit("spared", { team: fs[q].team, name: fs[q].name });
@@ -1643,7 +1819,7 @@
           }
           if (canAct(q)) knockBack(q);
           after(1.0, function () { rally(p); });
-        });
+        }, disc);
         return;
       }
 
@@ -1661,7 +1837,7 @@
                : "duck";                                   // blocked with the disc away
       var qp = pads[fs[q].pad];
       var glass = [qp.cx > 0 ? 15.8 : -15.8, pass, qp.cz + rand(-1.0, 1.0)];
-      var dur2 = rand(1.25, 1.4);
+      var dur2 = rand(1.25, 1.4) * slow;
       var passAt = Math.abs(fs[q].pos[0] - from[0]) / Math.abs(glass[0] - from[0]);
       var lead = kind === "flip" ? 0.45 : kind === "sidestep" ? 0.4 : 0.45 * evadeTime[kind];
       after(Math.max(0, dur2 * passAt - lead), function () {
@@ -1679,12 +1855,12 @@
         }
       });
       glass[1] = pass;                               // still passes where it was aimed
-      fly(p, arc(from, glass, 0, viaZ), dur2, function () {
+      fly(p, shape(from, glass, 0, viaZ), dur2, function () {
         spark(glass, hot(p));
-        emit("bounce", { team: fs[p].team, tom: bounced(p) });        // off the glass
-        flyHome(p, glass, viaZ == null ? null : -viaZ);
+        emit("bounce", { team: fs[p].team, tom: bounced(p, disc) });  // off the glass
+        flyHome(p, glass, viaZ == null ? null : -viaZ, disc);
         after(rand(0.3, 0.5), function () { rally(q); });
-      });
+      }, disc);
     });
   }
 
@@ -1693,17 +1869,21 @@
     var m = lerp3(chestWorld(p), chestWorld(q), 0.5);
     m[1] += rand(0.2, 0.7);
     m[2] += rand(-0.6, 0.6);
-    var landed = 0;
+    var landed = 0, discs = {};
     [p, q].forEach(function (who) {
       fs[who].lastThrowAim = 1;               // they meet in the middle
       throwFrom(who, function (from) {
         var mid = lerp3(from, m, 0.5);
+        discs[who] = ds[who];
         fly(who, [from, [mid[0], mid[1] + 0.3, mid[2] + rand(-0.6, 0.6)], m], 0.65, function () {
           if (++landed < 2) return;
           spark(m, "#ffffff");
-          flyHome(p, m); flyHome(q, m);
+          // Disc on disc, the hardest meeting there is: either may shatter.
+          var bq = maybeBreak(p, q), bp = maybeBreak(q, p);
+          if (bp) breakDisc(p, m, discs[p]); else flyHome(p, m, null, discs[p]);
+          if (bq) breakDisc(q, m, discs[q]); else flyHome(q, m, null, discs[q]);
           after(rand(1.0, 1.4), function () { rally(Math.random() < 0.5 ? p : q); });
-        });
+        }, discs[who]);
       });
     });
   }
@@ -1741,11 +1921,12 @@
   function ready(team) {
     var out = [];
     for (var i = 0; i < fs.length; i++)
-      if (fs[i].team === team && alive(i) && canAct(i) && discHome(i) && !fs[i].move && !fs[i].primed) out.push(i);
+      if (fs[i].team === team && alive(i) && canAct(i) && discReady(i) && !fs[i].move && !fs[i].primed) out.push(i);
     return out;
   }
 
   function startChain() {
+    if (choosing) return false;                    // a winner is still choosing its power
     var idle = ready(0).concat(ready(1));
     if (!idle.length) return false;
     rally(idle[Math.floor(Math.random() * idle.length)]);
@@ -1765,7 +1946,7 @@
     var q = pickFoe(p);
     if (q < 0) return;                             // nobody left to throw at
     fs[p].foe = q;
-    if (!canAct(p) || !discHome(p) || fs[p].primed) {
+    if (!canAct(p) || fs[p].primed || !arm(p)) {
       // It cannot throw just now -- mid-flip, still waiting on its disc.
       // Rather than making the exchange queue behind it, give it to somebody
       // who can: its own side first, since the fight should keep swinging
@@ -1775,6 +1956,13 @@
       if (mine.length) { rally(mine[Math.floor(Math.random() * mine.length)]); return; }
       var them = ready(1 - fs[p].team);
       if (them.length) { rally(them[Math.floor(Math.random() * them.length)]); return; }
+      if (allDisarmed()) {
+        // Nobody standing has a disc to throw -- two champions who break
+        // discs, between them, can do that. A round nobody can end is not
+        // a round, so the discs come back.
+        for (var r = 0; r < fs.length; r++) if (ds[r].state === "broken") ds[r].state = "back";
+        emit("rearm", {});
+      }
       after(0.25, function () { rally(p); });
       return;
     }
@@ -1792,6 +1980,12 @@
         return;
       }
     }
+    if (has(p, "arm") && Math.random() < ARM_CHANCE) { bodyShot(p, q, null, { arm: true }); return; }
+    if (has(p, "bugs") && Math.random() < BUG_CHANCE && !swarmed(q)) {
+      gridBugs(p, q);                              // they go on their own; the exchange carries on
+      after(0.6, function () { rally(p); });
+      return;
+    }
     if (canAct(q) && discHome(q) && !fs[q].primed && Math.random() < 0.15) { clash(p, q); return; }
     if (Math.random() < 0.12) {
       // Bank one off the ceiling: at the ring it stands on, or another. Late
@@ -1807,6 +2001,450 @@
     }
     // Or off a side wall, coming in from an angle rather than straight on.
     bodyShot(p, q, Math.random() < 0.22 ? pickWall() : null);
+  }
+
+  // ── Powers ────────────────────────────────────────────────────────────
+  // A fighter that wins a round chooses a power, one a win, and keeps every
+  // one it has chosen for as long as it holds the title -- and in the Hall,
+  // for good. The fight waits while it chooses. A second disc and Power of
+  // Flynn both need a comrade, so they are not offered to a side of one.
+  var POWERS = {
+    dual: { name: "DUAL WIELD",
+            text: "When a comrade falls, takes up their disc: two discs, twice the fire rate." },
+    "break": { name: "DISC BREAK",
+               text: "When its disc meets another, 1 in 10 shatters the other disc for the rest of the round." },
+    bit: { name: "BIT",
+           text: "1 in 10 exchanges the Bit acts: YES, a hit that always lands, or NO, a disc that never does." },
+    shield: { name: "MCP SHIELD",
+              text: "Eight squares turn slowly around it. Each stops one hit and is gone; the shield is spent with the last." },
+    flynn: { name: "POWER OF FLYNN",
+             text: "5 in 100: a comrade knocked out comes back." },
+    arm: { name: "TESLER ARM",
+           text: "1 in 30 attacks it launches its hand, trailing a light wall. Lands twice as often, stopped half as often." },
+    absorb: { name: "MCP ABSORB",
+              text: "Every enemy that goes down, it takes in that enemy's moves and what its fly learned." },
+    bugs: { name: "GRID BUGS",
+            text: "1 in 40 attacks, five grid bugs rise from the floor below it, scuttle to one opponent and climb on: 10 seconds wriggling, no throwing, no guarding." }
+  };
+  var POWER_ORDER = ["dual", "break", "bit", "shield", "flynn", "arm", "absorb", "bugs"];
+  var BUG_CHANCE = 1 / 40, BUG_COUNT = 5, BUG_HOLD = 10, BUG_SPEED = 3.4;   // metres a second
+  var BUG_EYE = "#b84dff", BUG_GREEN = "#4dff5e";
+  var BREAK_CHANCE = 0.1, BIT_CHANCE = 0.1;
+  var FLYNN_CHANCE = 0.05, ARM_CHANCE = 1 / 30;
+  var SHIELD_SQUARES = 8, SHIELD_R = 0.75, SHIELD_SIDE = 0.5, SHIELD_SPIN = 0.5;   // radians a second
+  var BIT_REST = "#4fc3ff", BIT_YES = "#ffd60a", BIT_NO = "#ff3b30";
+  var choosing = null;                             // { p, options } while a winner chooses
+
+  function has(p, id) { return !!(fs[p] && fs[p].powers && fs[p].powers.indexOf(id) >= 0); }
+
+  // What a winner may choose from: what it does not have yet. A second disc
+  // has to come from a comrade, so it is not offered to a side of one.
+  function offerFor(p) {
+    return POWER_ORDER.filter(function (id) {
+      return !has(p, id) && !((id === "dual" || id === "flynn") && sideSize[fs[p].team] < 2);
+    });
+  }
+  function choiceInfo() {
+    if (!choosing) return null;
+    var f = fs[choosing.p];
+    return { name: f.name, team: f.team, rank: (rankOf(f.stats.rounds) || {}).name || null,
+             have: f.powers.map(function (id) { return POWERS[id].name; }),
+             options: choosing.options.map(function (id) {
+               return { id: id, name: POWERS[id].name, text: POWERS[id].text };
+             }) };
+  }
+  function grant(id) {
+    if (!choosing || choosing.options.indexOf(id) < 0) return false;
+    var p = choosing.p;
+    choosing = null;
+    fs[p].powers.push(id);
+    if (id === "shield") fs[p].shield = fullShield();
+    keep(p);                                       // the Hall has it straight away
+    emit("choose", null);
+    emit("granted", { team: fs[p].team, name: fs[p].name, power: id });
+    beginChains(0.6);
+    return true;
+  }
+
+  // Disc Break. A disc that meets another -- a block, a catch, a clash in
+  // the air -- may shatter it, if the disc's owner has the power. A broken
+  // disc is gone for the round: no throwing, no blocking, only getting out
+  // of the way. `d` is which disc, when it is the one in the air.
+  function maybeBreak(by, q) {
+    return has(by, "break") && alive(q) && Math.random() < BREAK_CHANCE;
+  }
+  function breakDisc(q, at, d) {
+    d = d || ds[q];
+    d.state = "broken"; d.flight = null; d.trail = [];
+    spark(at, "#ffffff");
+    spark([at[0], at[1] + 0.25, at[2]], hot(q));
+    shatterDisc(at, fs[q].team === 0 ? program : sentinel, hot(q));
+    emit("discbreak", { team: fs[q].team, name: fs[q].name });
+  }
+  function allDisarmed() {
+    for (var i = 0; i < fs.length; i++) if (alive(i) && discReady(i)) return false;
+    for (var j = 0; j < fs.length; j++) if (alive(j) && ds[j].state === "flight") return false;
+    return true;
+  }
+
+  // The Bit. Every exchange its fighter is part of, it acts one time in ten,
+  // and when it acts it is a coin: YES or NO. YES is a hit that lands; NO is
+  // a disc that does not. A YES that comes up while its fighter is the one
+  // being thrown at, or a NO while it is throwing, has nothing to do yet, so
+  // the Bit holds it for the next exchange where it has -- every time it
+  // acts, it counts.
+  function bitCall(p, want) {
+    if (!has(p, "bit") || !alive(p)) return false;
+    var f = fs[p];
+    if (f.bitHold === want) { f.bitHold = null; bitAct(p, want); return true; }
+    if (Math.random() >= BIT_CHANCE) return false;
+    var mode = Math.random() < 0.5 ? "yes" : "no";
+    if (mode === want) { bitAct(p, mode); return true; }
+    f.bitHold = mode;
+    return false;
+  }
+  function bitAct(p, mode) {
+    fs[p].bitShow = { mode: mode, at: wall };
+    emit("bit", { team: fs[p].team, name: fs[p].name, mode: mode });
+  }
+  // Where the Bit is: drawn there every frame, and a NO stops a disc there.
+  function bitWorld(p) {
+    var a = fs[p].bitAt;
+    return a ? a.slice() : ahead(p, chestWorld(p), 0.5);
+  }
+
+  // MCP Shield. Eight squares stand in a ring around the fighter at chest
+  // height and turn slowly. A hit that would land meets whichever square is
+  // on its side when it arrives; that square is gone, and the next disc from
+  // that side goes through the gap. The last square takes the shield with
+  // it -- and it is a shield, not armour: it covers the chest, so a disc off
+  // the ceiling at the rings is nothing to do with it.
+  function fullShield() { var a = []; for (var i = 0; i < SHIELD_SQUARES; i++) a.push(true); return a; }
+  function shieldTurn(w) { return w * SHIELD_SPIN; }
+  // The square in the way of a disc coming in from `from` and arriving in
+  // `dur` fight seconds, with where it will be then; null for a gap.
+  function shieldSlot(q, from, dur) {
+    var f = fs[q];
+    if (!f.shield || !has(q, "shield") || !alive(q)) return null;
+    var N = SHIELD_SQUARES, step = 2 * Math.PI / N;
+    var rot = shieldTurn(wall + dur / pace);       // where the ring will have turned to
+    var k = Math.round((Math.atan2(from[2] - f.pos[1], from[0] - f.pos[0]) - rot) / step);
+    var slot = ((k % N) + N) % N;
+    if (!f.shield[slot]) return null;
+    var a = rot + k * step, c = chestWorld(q);
+    return { slot: slot, at: [f.pos[0] + Math.cos(a) * SHIELD_R, c[1], f.pos[1] + Math.sin(a) * SHIELD_R] };
+  }
+  function squareCorners(cx, cy, cz, a, h) {
+    var tx = -Math.sin(a) * h, tz = Math.cos(a) * h;
+    return [[cx - tx, cy - h, cz - tz], [cx + tx, cy - h, cz + tz], [cx + tx, cy + h, cz + tz], [cx - tx, cy + h, cz - tz]];
+  }
+  function shieldHit(q, slot, at) {
+    var f = fs[q];
+    if (!f.shield) return;
+    f.shield[slot] = false;
+    var C = squareCorners(at[0], at[1], at[2], Math.atan2(at[2] - f.pos[1], at[0] - f.pos[0]), SHIELD_SIDE / 2);
+    burst([[C[0], C[1]], [C[1], C[2]], [C[2], C[3]], [C[3], C[0]]], hot(q), at, 2.4, 0.03);
+    var left = f.shield.filter(Boolean).length;
+    emit("shieldhit", { team: f.team, name: f.name, left: left });
+    if (!left) {
+      f.shield = null;
+      f.powers = f.powers.filter(function (id) { return id !== "shield"; });
+      emit("shieldgone", { team: f.team, name: f.name });
+    }
+    keep(q);
+  }
+  function drawShield(p, cy, alpha) {
+    var f = fs[p], N = SHIELD_SQUARES, rot = shieldTurn(wall), col = hot(p);
+    for (var i = 0; i < N; i++) {
+      if (!f.shield[i]) continue;
+      var a = rot + i * 2 * Math.PI / N;
+      var cx = f.pos[0] + Math.cos(a) * SHIELD_R, cz = f.pos[1] + Math.sin(a) * SHIELD_R;
+      var z = 1000 - project([cx, cy, cz])[2] * 20;
+      [[SHIELD_SIDE / 2, 0.85], [SHIELD_SIDE * 0.3, 0.3]].forEach(function (sz) {
+        var P = squareCorners(cx, cy, cz, a, sz[0]).map(project);
+        var w = Math.max(1, 0.012 * cam.F / P[0][2]);
+        for (var e = 0; e < 4; e++) seg(z, P[e], P[(e + 1) % 4], w, col, alpha * sz[1], "round");
+      });
+    }
+  }
+
+  // Power of Flynn. A comrade knocked out comes back, now and then, if a
+  // fighter with the power is still standing on its side: it rezzes in on
+  // its own platform -- or an empty one, if a teammate has moved onto its
+  // own -- with every ring there back up. The knockout still counts.
+  function comeBack(p, settle) {
+    afterWall(settle + 0.6, function () {
+      if (alive(p) || !liveCount(fs[p].team)) return;
+      var pad = fs[p].home;
+      if (occupied(pad)) {
+        for (var i = 0; i < pads.length; i++) if (pads[i].team === fs[p].team && !occupied(i)) { pad = i; break; }
+      }
+      restoreRings(pad);
+      resetFighter(p, pad);
+      spark([pads[pad].cx, 1.2, pads[pad].cz], "#ffffff");
+      emit("flynn", { team: fs[p].team, name: fs[p].name });
+    });
+  }
+
+  // MCP Absorb. Every enemy that goes down, the fighter with it takes in:
+  // the moves it had named and what its fly had learned, the way a
+  // champion takes in its own side's at the end of a round.
+  function absorbFrom(c, p) {
+    var f = fs[c], g = fs[p];
+    if (f.brain && g.brain) f.brain.absorb([g.brain]);
+    g.combos.forEach(function (cb) { learnPairFrom(f, cb); });
+    f.absorbed = (f.absorbed || 0) + 1;
+    emit("mcpabsorb", { team: f.team, name: f.name, from: g.name });
+  }
+  // What it looks like: the fallen enemy does not fall or break up the usual
+  // way, it comes apart into motes of light where it stood, and they leave
+  // one at a time, a stream rather than a cloud, each flying in to the
+  // absorbing champion (or, with more than one, to each in turn).
+  var motes = [];
+  function dissolve(p, takers) {
+    var f = fs[p], W = [], col = hot(p), i, n = 0;
+    for (i = 0; i < 20; i++) W.push(toWorld(p, f.pose, i));
+    var at = [];
+    limbs.forEach(function (lb) { for (var k = 0; k < 5; k++) at.push(lerp3(W[lb[0]], W[lb[1]], (k + 0.5) / 5)); });
+    var hc = lerp3(W[10], W[11], 0.55);
+    for (i = 0; i < 8; i++) at.push([hc[0] + Math.cos(i * 0.785) * 0.12, hc[1] + Math.sin(i * 0.785) * 0.13, hc[2]]);
+    // Shuffle, so the stream takes the body apart from all over at once.
+    for (i = at.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = at[i]; at[i] = at[j]; at[j] = t; }
+    at.forEach(function (w) {
+      motes.push({ home: w, to: takers[n % takers.length], go: wall + 0.35 + n * 0.028,
+                   dur: rand(0.6, 0.85), lift: rand(0.4, 1.2), sw: rand(-0.8, 0.8), col: col, ph: rand(0, 6) });
+      n++;
+    });
+    // Instead of falling or breaking up: what it was is all in the motes now.
+    pieces = pieces.filter(function (pc) { return pc.who !== p || pc.born !== wall; });
+    if (f.mode === "fall" || f.mode === "derez") setMode(p, "gone");
+  }
+  function stepMotes() {
+    var live = [];
+    motes.forEach(function (m) {
+      var pos, tail = null, u = (wall - m.go) / m.dur, a = 1;
+      function along(v) {
+        var e = ease(v), q = lerp3(m.home, chestWorld(m.to), e);
+        q[1] += m.lift * Math.sin(Math.PI * v);
+        q[2] += m.sw * Math.sin(Math.PI * v);
+        return q;
+      }
+      if (u >= 1) { if (motes.length === 1 || Math.random() < 0.08) spark(chestWorld(m.to), m.col); return; }
+      if (u < 0) {
+        // Still waiting its turn: hanging where the body was, shimmering.
+        var j = 0.015 * Math.sin(wall * 13 + m.ph);
+        pos = [m.home[0] + j, m.home[1] + j, m.home[2] - j];
+        a = 0.75 + 0.25 * Math.sin(wall * 9 + m.ph);
+      } else {
+        pos = along(u);
+        tail = along(Math.max(0, u - 0.12));      // a short streak behind it
+        a = 1 - 0.3 * u;
+      }
+      live.push(m);
+      var c = project(pos);
+      if (c[2] <= 0.2) return;
+      var r = Math.max(2.5, 0.075 * cam.F / c[2]);
+      if (tail) seg(1000 - c[2] * 20 + 2, project(tail), c, r * 0.45, m.col, a * 0.6, "round");
+      seg(1000 - c[2] * 20 + 3, [c[0] - 0.4, c[1]], [c[0] + 0.4, c[1]], r, m.col, a, "round");
+    });
+    motes = live;
+  }
+
+  // Grid bugs. Five rise through the floor grid far below the fighter that
+  // sent them, scuttle across it to under one opponent, and jump up onto
+  // it: it wriggles for ten seconds, unable to throw or guard, and they drop
+  // off when it is free -- or when it falls, or the round ends. Each is four
+  // legs and an upside-down triangle of a head with a purple eye.
+  var bugs = [];
+  function swarmed(q) {
+    if (fs[q].mode === "bugged") return true;
+    for (var i = 0; i < bugs.length; i++) if (bugs[i].q === q && bugs[i].ph !== "fall") return true;
+    return false;
+  }
+  var BUG_HOLDS = [9, 12, 16, 0, 10];              // where on the body each one ends up
+  function gridBugs(p, q) {
+    var pd = pads[fs[p].pad];
+    for (var i = 0; i < BUG_COUNT; i++) {
+      var a = 2 * Math.PI * i / BUG_COUNT + rand(-0.3, 0.3), r = rand(0.6, 1.6);
+      bugs.push({ by: p, q: q, ph: "rise", t0: wall + i * 0.18, gait: rand(0, 6), alpha: 0,
+                  pos: [pd.cx + Math.cos(a) * r, floorY - 0.6, pd.cz + Math.sin(a) * r],
+                  off: [rand(-0.5, 0.5), rand(-0.5, 0.5)], j: BUG_HOLDS[i % BUG_HOLDS.length],
+                  jit: rand(0, 6), col: BUG_GREEN, vel: null });
+    }
+    spark([pd.cx, floorY + 0.2, pd.cz], hot(p));
+    emit("gridbugs", { team: fs[p].team, name: fs[p].name, at: fs[q].name });
+  }
+  function bugHold(b) {
+    var w = toWorld(b.q, fs[b.q].pose, b.j);
+    var s = Math.sin(wall * 9 + b.jit) * 0.03;
+    return [w[0] + s, w[1] + Math.cos(wall * 7 + b.jit) * 0.03, w[2] - s];
+  }
+  function stepBugs(dt) {
+    var live = [];
+    bugs.forEach(function (b) {
+      var q = b.q, f = fs[q], u;
+      if (!f) return;
+      if (b.ph === "rise") {
+        if (wall < b.t0) { live.push(b); return; }
+        u = Math.min(1, (wall - b.t0) / 0.8);
+        b.pos[1] = floorY - 0.6 + 0.75 * ease(u);
+        b.alpha = u; b.gait += dt * 4;
+        if (u >= 1) b.ph = "walk";
+      } else if (b.ph === "walk") {
+        if (!alive(q)) { b.ph = "fall"; b.vel = [0, 0, 0]; }
+        else {
+          // Sideways and skittering, like a crab: it wanders off its line
+          // and back as it goes.
+          var to = [f.pos[0] + b.off[0], floorY + 0.15, f.pos[1] + b.off[1]];
+          var dx = to[0] - b.pos[0], dz = to[2] - b.pos[2], l = Math.sqrt(dx * dx + dz * dz);
+          b.gait += dt * 16;
+          if (l < 0.25) { b.ph = "jump"; b.t0 = wall; b.from = b.pos.slice(); }
+          else {
+            var st = Math.min(l, BUG_SPEED * dt), wob = Math.sin(b.gait * 0.35) * 0.6;
+            b.pos[0] += (dx / l) * st - (dz / l) * st * wob;
+            b.pos[2] += (dz / l) * st + (dx / l) * st * wob;
+          }
+        }
+      } else if (b.ph === "jump") {
+        if (!alive(q)) { b.ph = "fall"; b.vel = [0, 0, 0]; }
+        else {
+          u = Math.min(1, (wall - b.t0) / 0.9);
+          var hold = bugHold(b), at = lerp3(b.from, hold, ease(u));
+          at[1] += 1.4 * Math.sin(Math.PI * u);
+          b.pos = at; b.gait += dt * 6;
+          if (u >= 1) {
+            b.ph = "on";
+            var m = f.mode;
+            if (m === "stand" || m === "hit" || m === "evade" || m === "flip") {
+              setMode(q, "bugged");                // the first one on starts the ten seconds
+              f.move = null; f.blockTarget = 0;
+              emit("bugged", { team: f.team, name: f.name });
+            } else if (m !== "bugged") { b.ph = "fall"; b.vel = [rand(-1, 1), 0, rand(-1, 1)]; }
+          }
+        }
+      } else if (b.ph === "on") {
+        if (f.mode !== "bugged") { b.ph = "fall"; b.vel = [rand(-1.5, 1.5), rand(1, 2.5), rand(-1.5, 1.5)]; }
+        else { b.pos = bugHold(b); b.gait += dt * 20; }
+      }
+      if (b.ph === "fall") {
+        if (b.fallAt == null) b.fallAt = wall;
+        b.vel[1] -= 9.8 * dt;
+        b.pos = [b.pos[0] + b.vel[0] * dt, b.pos[1] + b.vel[1] * dt, b.pos[2] + b.vel[2] * dt];
+        b.gait += dt * 25;
+        b.alpha = Math.max(0, 1 - (wall - b.fallAt) / 1.4);
+        if (b.alpha <= 0 || b.pos[1] < floorY - 1) return;
+      }
+      live.push(b);
+      drawBug(b);
+    });
+    bugs = live;
+  }
+  function drawBug(b) {
+    if (b.alpha <= 0.01) return;
+    var c = project(b.pos);
+    if (c[2] <= 0.2) return;
+    var s = 0.42 * cam.F / c[2], z = 1000 - c[2] * 20 + 4, col = b.col, a = b.alpha;
+    var w = Math.max(1, 0.025 * cam.F / c[2]), x = c[0], y = c[1], g = b.gait;
+    // Four legs, two a side, stepping in alternate pairs.
+    [[-1, 0], [-1, 1], [1, 0], [1, 1]].forEach(function (L) {
+      var sd = L[0], ph = g + (L[1] ? Math.PI : 0) + (sd > 0 ? Math.PI : 0);
+      var lift = Math.max(0, Math.sin(ph)) * 0.2, swing = Math.cos(ph) * 0.16;
+      var hip = [x + sd * s * 0.22, y - s * 0.02 + L[1] * s * 0.12];
+      var knee = [x + sd * s * (0.6 + swing * 0.4), y - s * (0.3 + lift) + L[1] * s * 0.14];
+      var foot = [x + sd * s * (0.82 + swing), y + s * (0.42 - lift) + L[1] * s * 0.1];
+      seg(z, hip, knee, w, col, a, "round");
+      seg(z, knee, foot, w, col, a, "round");
+    });
+    // The head: a triangle, point down, and the eye.
+    var A = [x - s * 0.34, y - s * 0.22], B = [x + s * 0.34, y - s * 0.22], C = [x, y + s * 0.34];
+    seg(z + 0.1, A, B, w * 1.2, col, a, "round");
+    seg(z + 0.1, B, C, w * 1.2, col, a, "round");
+    seg(z + 0.1, C, A, w * 1.2, col, a, "round");
+    seg(z + 0.2, [x - 0.5, y - s * 0.06], [x + 0.5, y - s * 0.06], Math.max(2.5, s * 0.17), BUG_EYE, a, "round");
+  }
+
+  // Its shapes, as wireframes. The icosahedron's twelve vertices and its
+  // twenty face directions are enough for all of them: the dodecahedron's
+  // vertices are the face directions, and so are the stellation's spikes.
+  var BIT = (function () {
+    var P = (1 + Math.sqrt(5)) / 2, v = [], i, j, k;
+    [-1, 1].forEach(function (a) {
+      [-1, 1].forEach(function (b) {
+        v.push([0, a, b * P], [a, b * P, 0], [b * P, 0, a]);
+      });
+    });
+    var R = Math.sqrt(1 + P * P);
+    v = v.map(function (q) { return [q[0] / R, q[1] / R, q[2] / R]; });   // circumradius 1
+    var e = 2 / R, near = function (a, b) {
+      var dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+      return Math.abs(Math.sqrt(dx * dx + dy * dy + dz * dz) - e) < 1e-6;
+    };
+    var ico = [], faces = [];
+    for (i = 0; i < 12; i++) for (j = i + 1; j < 12; j++) if (near(v[i], v[j])) ico.push([i, j]);
+    for (i = 0; i < 12; i++) for (j = i + 1; j < 12; j++) for (k = j + 1; k < 12; k++)
+      if (near(v[i], v[j]) && near(v[j], v[k]) && near(v[i], v[k])) faces.push([i, j, k]);
+    var dirs = faces.map(function (f) {
+      var c = [0, 1, 2].map(function (a) { return v[f[0]][a] + v[f[1]][a] + v[f[2]][a]; });
+      var l = Math.sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]);
+      return [c[0] / l, c[1] / l, c[2] / l];
+    });
+    var dod = [], tri = [];
+    for (i = 0; i < 20; i++) {
+      for (j = i + 1; j < 20; j++) {
+        var shared = faces[i].filter(function (x) { return faces[j].indexOf(x) >= 0; }).length;
+        if (shared === 2) dod.push([i, j]);        // neighbouring faces: a dodecahedron edge
+      }
+      faces[i].forEach(function (x) { tri.push([i, x]); });
+    }
+    var oct = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], octE = [];
+    for (i = 0; i < 6; i++) for (j = i + 1; j < 6; j++) if (Math.abs(oct[i][0] + oct[j][0]) + Math.abs(oct[i][1] + oct[j][1]) + Math.abs(oct[i][2] + oct[j][2]) > 0.5) octE.push([i, j]);
+    return { v: v, dirs: dirs, ico: ico, dod: dod, tri: tri, oct: oct, octE: octE };
+  })();
+
+  // Draw the Bit for fighter p, around world point c.
+  function drawBit(p, c, z0, alpha) {
+    var f = fs[p], size = 0.2;
+    var a = wall * 0.9, b = wall * 0.53;
+    var ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+    function place(q, r) {
+      var x = q[0] * r, y = q[1] * r, zz = q[2] * r;
+      var x1 = x * ca + zz * sa, z1 = -x * sa + zz * ca;
+      var y1 = y * cb - z1 * sb, z2 = y * sb + z1 * cb;
+      return project([c[0] + x1 * size, c[1] + y1 * size, c[2] + z2 * size]);
+    }
+    function edges(list, A, B, col, w, o) {
+      for (var i = 0; i < list.length; i++) {
+        var pa = A(list[i][0]), pb = B(list[i][1]);
+        seg(z0, pa, pb, w, col, alpha * o, "round");
+      }
+    }
+    var sh = f.bitShow, age = sh ? wall - sh.at : 99;
+    var w = Math.max(1, 0.012 * cam.F / project(c)[2]);
+    if (age < 1.1 && sh.mode === "yes") {
+      // YES: a yellow octahedron.
+      var O = BIT.oct.map(function (q) { return place(q, 1.15); });
+      edges(BIT.octE, function (i) { return O[i]; }, function (i) { return O[i]; }, BIT_YES, w * 1.3, 1);
+      return;
+    }
+    var I = BIT.v.map(function (q) { return place(q, 1); });
+    if (age < 1.1 && sh.mode === "no") {
+      // NO: red, all points -- a stellation of the icosahedron, every face
+      // drawn out into a long spike.
+      var S = BIT.dirs.map(function (q) { return place(q, 2.3); });
+      edges(BIT.ico, function (i) { return I[i]; }, function (i) { return I[i]; }, BIT_NO, w, 0.6);
+      edges(BIT.tri, function (i) { return S[i]; }, function (i) { return I[i]; }, BIT_NO, w * 1.2, 1);
+      return;
+    }
+    // At rest it never settles: icosahedron, dodecahedron, icosahedron,
+    // dodecahedron, half a second each, with a quick crossfade between so the
+    // change reads as a shift rather than a flicker.
+    var ph = (wall / 0.5) % 2, k = ph % 1, XF = 0.2;      // crossfade in the last fifth of each
+    var ico = ph < 1;
+    var fade = k > 1 - XF ? (k - (1 - XF)) / XF : 0;      // 0 holding, 1 fully turned
+    var oIco = ico ? 1 - fade : fade, oDod = 1 - oIco;
+    var D = BIT.dirs.map(function (q) { return place(q, 1); });
+    if (oIco > 0.01) edges(BIT.ico, function (i) { return I[i]; }, function (i) { return I[i]; }, BIT_REST, w, oIco);
+    if (oDod > 0.01) edges(BIT.dod, function (i) { return D[i]; }, function (i) { return D[i]; }, BIT_REST, w, oDod);
   }
 
   // ── Rounds ────────────────────────────────────────────────────────────
@@ -1836,6 +2474,24 @@
       reward(by, "knockout");                      // a knockout or a kill: the bigger dose
     }
     if (fs[p].champion) keep(p);                   // its record as it fell
+    // A champion that wields two takes up the disc of the comrade who fell.
+    for (var c = 0; c < fs.length; c++) {
+      if (c === p || fs[c].team !== fs[p].team || !alive(c) || !has(c, "dual") || fs[c].spare) continue;
+      fs[c].spare = { state: "back", pos: [0, 0, 0], trail: [], flight: null };
+      spark(chestWorld(c), hot(c));
+      emit("dual", { team: fs[c].team, name: fs[c].name });
+    }
+    // Power of Flynn: one roll, if anybody standing on its side has it.
+    for (var fl = 0; fl < fs.length; fl++) {
+      if (fl === p || fs[fl].team !== fs[p].team || !alive(fl) || !has(fl, "flynn")) continue;
+      if (Math.random() < FLYNN_CHANCE) comeBack(p, settle);
+      break;
+    }
+    // MCP Absorb: every enemy standing with it takes in what this one knew.
+    var takers = [];
+    for (var ab = 0; ab < fs.length; ab++)
+      if (fs[ab].team !== fs[p].team && alive(ab) && has(ab, "absorb")) { absorbFrom(ab, p); takers.push(ab); }
+    if (takers.length) dissolve(p, takers);
     // Called once per fighter per round, so it is what the tempo counts.
     emit("out", { team: fs[p].team, left: liveCount(fs[p].team) });
     if (liveCount(fs[p].team) > 0) return false;   // its side fights on without it
@@ -1875,6 +2531,7 @@
       f.name = freshName(taken);
       f.stats = blankStats();
       f.combos = []; f.plan = null; f.prevAim = -1;
+      f.powers = []; f.shield = null; f.absorbed = 0;
       f.brain = freshBrain();
       f.foe = -1; f.lastAim = -1; f.lastGuard = -1;
     }
@@ -1893,7 +2550,17 @@
     // new name and nothing to their name yet, so a champion is the only
     // thing in the arena that accumulates -- and the only one with anything
     // to lose.
-    if (hall) hallRound();
+    var picker = -1;                               // who chooses a power for winning
+    if (hall) {
+      hallRound();
+      // From the Hall, the champion standing on the winning side with the
+      // most to show for the round chooses.
+      var bestH = -1;
+      for (var hp = 0; hp < fs.length; hp++) {
+        if (!fs[hp].seated || fs[hp].team !== lastWinner || !alive(hp)) continue;
+        if (tally(fs[hp]) > bestH) { bestH = tally(fs[hp]); picker = hp; }
+      }
+    }
     else {
       var champ = -1, best = -1;
       for (var h = 0; h < fs.length; h++) {
@@ -1907,6 +2574,7 @@
         }
       }
       if (champ >= 0) fs[champ].stats.rounds++;
+      picker = champ;
 
       // The champion stood on the winning side -- nobody else is left standing
       // -- and before its teammates are replaced it takes in what they learned
@@ -1933,6 +2601,8 @@
         fs[n].cid = null; fs[n].crowned = null;
         fs[n].stats = blankStats();
         fs[n].combos = []; fs[n].plan = null; fs[n].prevAim = -1;
+        fs[n].powers = []; fs[n].shield = null;      // powers are won, not handed down
+        fs[n].absorbed = 0;
         // The champion's side starts the round knowing what the champion
         // knows: a copy of its fly, and its moves. The side that lost starts
         // from nothing -- new flies that will flail at first.
@@ -1952,24 +2622,43 @@
     }
 
     for (var g = 0; g < pads.length; g++) restoreRings(g);
-    for (var i = 0; i < fs.length; i++) {
-      var f = fs[i];
-      f.pad = f.home;
-      f.ring = 0; f.ang = 0; f.pos = [pads[f.home].cx, pads[f.home].cz];
-      f.move = null; f.clingRing = -1; f.willClimb = false; f.foe = -1;
-      f.blockTarget = 0; f.block = 0;
-      f.plan = null;                               // nothing half-played carries over
-      f.primed = false;                            // nor a throw half thrown
-      f.spared = false;                            // the free hit comes back each round
-      setMode(i, "rez");
-      f.yOff = 0; f.alpha = 0;
-      play(i, "idle");
-      ds[i] = { state: "back", pos: [0, 0, 0], trail: [], flight: null };
-    }
+    for (var i = 0; i < fs.length; i++) resetFighter(i, fs[i].home);
     // Anything still queued belongs to the round that just ended.
-    queue = []; wallQueue = [];
+    queue = []; wallQueue = []; bugs = [];
     banner = "";
-    for (var j = 0; j < teamSize; j++) afterWall(1.2 + j * 0.35, startChain);
+    // The winner chooses a power before anybody throws. The arena waits for
+    // the choice -- the fighters stand rezzed in, ready -- however long it
+    // takes.
+    var offer = picker >= 0 ? offerFor(picker) : [];
+    if (offer.length) {
+      choosing = { p: picker, options: offer };
+      emit("choose", choiceInfo());
+    } else {
+      beginChains(1.2);
+    }
+  }
+
+  // A fighter rezzing in on platform `pad`: at the start of a round, or
+  // brought back by Power of Flynn.
+  function resetFighter(i, pad) {
+    var f = fs[i];
+    f.pad = pad;
+    f.ring = 0; f.ang = 0; f.pos = [pads[pad].cx, pads[pad].cz];
+    f.move = null; f.clingRing = -1; f.willClimb = false; f.foe = -1;
+    f.blockTarget = 0; f.block = 0;
+    f.plan = null;                                 // nothing half-played carries over
+    f.primed = false;                              // nor a throw half thrown
+    f.spared = false;                              // the free hit comes back each round
+    f.spare = null;                                // a second disc is taken up again, or not
+    f.bitHold = null; f.bitShow = null;
+    setMode(i, "rez");
+    f.yOff = 0; f.alpha = 0;
+    play(i, "idle");
+    ds[i] = { state: "back", pos: [0, 0, 0], trail: [], flight: null };
+  }
+
+  function beginChains(lead) {
+    for (var j = 0; j < teamSize; j++) afterWall(lead + j * 0.35, startChain);
   }
 
   // ── Frame ─────────────────────────────────────────────────────────────
@@ -2052,7 +2741,10 @@
       var col = f.team === 0 ? program : sentinel, alpha = f.alpha;
       var S = [];
       for (var j = 0; j < 20; j++) S.push(project(toWorld(p, local, j)));
+      // With its hand launched, the arm ends at the wrist.
+      var handOut = (ds[p].arm && ds[p].state === "flight") || !!(f.spare && f.spare.arm && f.spare.state === "flight");
       for (var k = 0; k < limbs.length; k++) {
+        if (handOut && limbs[k][1] === 19) continue;
         var lb = limbs[k], a1 = S[lb[0]], b1 = S[lb[1]], depth = (a1[2] + b1[2]) / 2;
         limb(1000 - depth * 20, a1, b1, Math.max(2, lb[2] * cam.F / depth), col, alpha);
       }
@@ -2073,22 +2765,44 @@
       nameAt(f.name, hc[0], nameTop, hs * 0.62,
              f.champion ? lit : col, alpha * (f.champion ? 1 : 0.8), zAt);
       if (f.champion) rankAt(f.stats.rounds, hc[0], nameTop - hs * 0.42, hs * 0.23, lit, alpha, zAt);
+      // The Bit keeps station beside the head, below the name, swinging
+      // slowly from one shoulder to the other and bobbing as it goes.
+      if (has(p, "bit")) {
+        // Behind the shoulder, out of the line of its own throws.
+        var head = toWorld(p, local, 11), sway = Math.sin(wall * 0.35 + p);
+        f.bitAt = [head[0] - f.fv[0] * 0.6, head[1] + 0.02 + Math.sin(wall * 2.1) * 0.05,
+                   head[2] - f.fv[1] * 0.6 + sway * 0.25];
+        drawBit(p, f.bitAt, 1000 - project(f.bitAt)[2] * 20 + 2, alpha);
+      }
+      if (f.shield && has(p, "shield")) drawShield(p, toWorld(p, local, 9)[1], alpha);
     });
 
-    // Discs and their trails.
+    // Discs and their trails -- a fighter's own, and a second one if it has
+    // taken up a fallen comrade's.
     fs.forEach(function (_d, p) {
-      var d = ds[p], f = fs[p];
+      drawDisc(p, ds[p], false);
+      if (fs[p].spare) drawDisc(p, fs[p].spare, true);
+    });
+    function drawDisc(p, d, second) {
+      var f = fs[p];
+      if (d.state === "broken") return;
       if (d.state === "flight") {
         var fl = d.flight, t = Math.min(1, (now - fl.t0) / fl.dur);
         d.pos = flightPoint(fl, t);
-        d.trail = [d.pos].concat(d.trail).slice(0, trailLen + 1);
+        d.trail = [d.pos].concat(d.trail);
+        // A disc's streak is short; a launched hand's light wall stays, all
+        // of it, until the hand is home.
+        if (!d.arm) d.trail = d.trail.slice(0, trailLen + 1);
+        else if (d.trail.length > 900) d.trail.length = 900;
         if (t >= 1) { d.flight = null; d.state = "hand"; fl.done(); }
       } else {
-        d.pos = d.state === "hand" ? handWorld(p) : d.state === "shield" ? shieldWorld(p) : backWorld(p);
+        d.pos = second ? toWorld(p, f.pose, 15)        // the second disc rides in the other hand
+              : d.state === "hand" ? handWorld(p) : d.state === "shield" ? shieldWorld(p) : backWorld(p);
         d.trail = d.trail.slice(0, Math.max(0, d.trail.length - 3));     // the streak fades after a catch
       }
       if (f.mode === "gone" || f.mode === "derez") return;
       var alpha = d.state === "flight" ? 1 : f.alpha;
+      if (d.arm && d.state === "flight") { drawArm(p, d); return; }
       var s = project(d.pos), r = 0.3 * cam.F / s[2], view = norm(sub(d.pos, cam.p));
       var dw, dh;
       if (d.state === "flight") {
@@ -2113,9 +2827,38 @@
         seg(1000 - tp[g][2] * 20 - 1, tp[g], tp[g + 1], tw,
             f.team === 0 ? programHi : sentinelHi, 0.85 * (1 - g / trailLen), "round");
       }
-    });
+    }
+
+    // A launched hand, and the light wall it lays behind it like a light
+    // cycle: a bright top edge, a dimmer foot and the wall between, all the
+    // way back to where it left the wrist. Its disc stays on its back.
+    function drawArm(p, d) {
+      var f = fs[p], hc = hot(p);
+      var tp = d.trail.map(project);
+      var lo = d.trail.map(function (q) { return project([q[0], q[1] - 0.16, q[2]]); });
+      for (var g = 0; g + 1 < tp.length; g++) {
+        var z = 1000 - tp[g][2] * 20 - 1;
+        seg(z, tp[g], tp[g + 1], Math.max(1.5, 0.03 * cam.F / tp[g][2]), hc, 0.95, "round");
+        seg(z - 1, lo[g], lo[g + 1], 1, hc, 0.5);
+        if (g % 3 === 0) seg(z - 1, tp[g], lo[g], Math.max(1, 0.02 * cam.F / tp[g][2]), hc, 0.22);
+      }
+      // The hand: a fist leading, the stub of a wrist behind it.
+      var back = d.trail.length > 3 ? d.trail[3] : handWorld(p);
+      var dir = norm(sub(d.pos, back));
+      var tail = [d.pos[0] - dir[0] * 0.16, d.pos[1] - dir[1] * 0.16, d.pos[2] - dir[2] * 0.16];
+      var a = project(d.pos), b = project(tail);
+      limb(1000 - a[2] * 20 + 2, b, a, Math.max(3, 0.09 * cam.F / a[2]), f.team === 0 ? program : sentinel, 1);
+      seg(1000 - a[2] * 20 + 3, b, a, Math.max(1, 0.03 * cam.F / a[2]), hc, 1, "round");
+      if (f.mode === "gone" || f.mode === "derez") return;
+      var bw = backWorld(p), bs = project(bw), br = 0.3 * cam.F / bs[2];
+      var di = put("disc", 1000 - bs[2] * 20 - 3);
+      di.x = bs[0]; di.y = bs[1]; di.w = br; di.h = br;
+      di.c = f.team === 0 ? program : sentinel; di.hot = hc; di.o = f.alpha;
+    }
 
     if (pieces.length) stepPieces(realDt);
+    if (bugs.length) stepBugs(realDt);
+    if (motes.length) stepMotes();
 
     for (var n = 0; n < sparkData.length; n++) {
       var sd = sparkData[n];
@@ -2183,6 +2926,9 @@
       });
     },
     setPaused: setPaused,
+    // The winner's power, chosen from what "choose" offered. The next round
+    // starts once it is given.
+    grant: grant,
     // Listen to the fight: ("throw"|"block", { team, aim }).
     on: function (fn) { if (typeof fn === "function") listeners.push(fn); },
     // Something to keep time with: fn(windUp, team, name, champion) -> real seconds from now
@@ -2214,12 +2960,16 @@
         hall: hall,
         score: score.slice(),
         banner: banner,
+        choosing: choiceInfo(),
         sides: SIDE_NAME.slice(),
         fighters: fs.map(function (f, i) {
           return { team: f.team, alive: alive(i), name: f.name,
                    champion: f.champion, seated: !!f.seated, id: f.cid || null,
                    points: tally(f), stats: f.stats,
                    rank: f.champion ? (rankOf(f.stats.rounds) || {}).name : null,
+                   powers: (f.powers || []).map(function (id) { return POWERS[id].name; }),
+                   disarmed: ds[i].state === "broken", dual: !!f.spare,
+                   shield: f.shield ? f.shield.filter(Boolean).length : 0, bugged: f.mode === "bugged",
                    combos: f.combos.map(function (c) {
                      return { name: c.name, used: c.used, trig: c.trig };
                    }) };

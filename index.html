@@ -258,6 +258,23 @@
     .hall .row { grid-template-columns: 18px minmax(0, 1fr); }
     .hall .sides { grid-column: 2; }
   }
+  /* A round's winner choosing its power. The arena stays in view behind
+     it: the fighters are rezzed in and waiting on the choice. */
+  .pick { background: rgba(0, 0, 0, 0.3); }
+  .pick .panel { width: min(520px, 100%); }
+  .pick .sub { padding: 10px 16px 0; color: var(--chrome-dim); line-height: 1.7; }
+  .pick .sub b { font-weight: 700; letter-spacing: 0.26em; }
+  .pick .sub b.a { color: var(--side-a); }
+  .pick .sub b.b { color: var(--side-b); }
+  .pick .list { padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .pick button.opt {
+    background: transparent; cursor: pointer; font: inherit; text-align: left;
+    border: 1px solid var(--rule); border-radius: 2px; color: var(--chrome);
+    padding: 12px 14px; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .pick button.opt b { display: block; color: var(--accent-hi); letter-spacing: 0.3em; font-weight: 700; margin-bottom: 4px; }
+  .pick button.opt span { color: var(--chrome-dim); font-size: 9px; letter-spacing: 0.1em; line-height: 1.6; text-transform: none; }
+  .pick button.opt:hover, .pick button.opt:focus-visible { border-color: var(--accent); outline: none; }
 
   .credit {
     font-size: 9px; letter-spacing: 0.04em; color: var(--chrome-dim);
@@ -378,6 +395,14 @@
   </div>
 </div>
 
+<div class="hall pick" id="pick" hidden role="dialog" aria-modal="true" aria-labelledby="pick-title">
+  <div class="panel">
+    <header><h2 id="pick-title">Choose a power</h2></header>
+    <div class="sub" id="pick-sub"></div>
+    <div class="list" id="pick-list"></div>
+  </div>
+</div>
+
   <div class="curtain" id="curtain">
     <button class="start" id="start" type="button">Begin the duel</button>
   </div>
@@ -388,9 +413,9 @@
 <script src="learn.js?v=d1de0737"></script>
 <script src="mbdata.js?v=60a3e3e7"></script>
 <script src="flybrain.js?v=a96d3f61"></script>
-<script src="sound.js?v=b4e1ef97"></script>
+<script src="sound.js?v=c0011894"></script>
 <script src="poses.js?v=573e2db4"></script>
-<script src="discwars.js?v=466122db"></script>
+<script src="discwars.js?v=05d2b785"></script>
 <script>
 (function () {
   "use strict";
@@ -571,7 +596,7 @@
         }).join(" \u00b7 ") + "</div>";
     }
     var key = st.score.join(":") + "|" + st.banner + "|" + flags + "|" + hallLine +
-              "|" + (ch ? ch.name + ch.points + ch.stats.rounds + (ch.rank || "") +
+              "|" + (ch ? (ch.powers || []).join() + ch.name + ch.points + ch.stats.rounds + (ch.rank || "") +
                           (ch.combos || []).map(function (c) { return c.name + c.used; }).join() : "");
     if (key === boardKey) return;
     boardKey = key;
@@ -590,7 +615,8 @@
             ch.name + "</b> \u00b7 " + ch.stats.rounds +
             (ch.stats.rounds === 1 ? " ROUND HELD" : " ROUNDS HELD") +
             " \u00b7 " + ch.points + " PTS \u00b7 " + ch.stats.kills +
-            (ch.stats.kills === 1 ? " KILL" : " KILLS") + "</div>" +
+            (ch.stats.kills === 1 ? " KILL" : " KILLS") +
+            ((ch.powers || []).length ? " \u00b7 " + ch.powers.join(" \u00b7 ") : "") + "</div>" +
             (ch.combos && ch.combos.length
               ? '<div class="palette">' + ch.combos.map(function (c) {
                   // A counter answers a guard it has just had to use; a press
@@ -710,6 +736,10 @@
         var st = r.stats || {};
         var moves = (r.combos || []).length;
         var fly = r.brain ? " · FLY " + (r.brain.decisions || 0) + " MOVES" : "";
+        var POWER_NAMES = { dual: "DUAL WIELD", "break": "DISC BREAK", bit: "BIT", shield: "MCP SHIELD",
+                            flynn: "POWER OF FLYNN", arm: "TESLER ARM", absorb: "MCP ABSORB", bugs: "GRID BUGS" };
+        var pw = (r.powers || []).map(function (id) { return POWER_NAMES[id] || ""; }).filter(Boolean);
+        fly += pw.length ? " · " + pw.join(" · ") : "";
         var id = esc(r.id);
         return '<div class="row' + (on ? " on" : "") + '" data-id="' + id + '">' +
           '<input type="checkbox" aria-label="Field ' + esc(r.name) + '"' + (on ? " checked" : "") + ">" +
@@ -786,6 +816,43 @@
   });
 
   DiscWars.on(function (kind, info) { if (kind === "record") enshrine(info); });
+
+  // ── A winner's power ───────────────────────────────────────────────────
+  // The fight offers, this shows the offer, and nothing happens until a
+  // power is chosen: the next round waits on it.
+  var pickBox = document.getElementById("pick");
+  var pickSub = document.getElementById("pick-sub");
+  var pickList = document.getElementById("pick-list");
+  function showPick(info) {
+    if (!info) { pickBox.hidden = true; return; }
+    pickSub.innerHTML = esc(info.rank || "CHAMPION") + ' <b class="nm ' + (info.team === 0 ? "a" : "b") + '">' +
+      esc(info.name) + "</b> won the round" +
+      (info.have.length ? " · holds " + info.have.map(esc).join(" · ") : "");
+    pickList.innerHTML = info.options.map(function (o) {
+      return '<button type="button" class="opt" data-id="' + esc(o.id) + '"><b>' + esc(o.name) +
+             "</b><span>" + esc(o.text) + "</span></button>";
+    }).join("");
+    pickBox.hidden = false;
+    var first = pickList.querySelector("button");
+    if (first) first.focus();
+  }
+  pickList.addEventListener("click", function (e) {
+    var b = e.target.closest("button.opt");
+    if (b && DiscWars.grant) DiscWars.grant(b.getAttribute("data-id"));
+  });
+  DiscWars.on(function (kind, info) {
+    if (kind === "choose") showPick(info);
+    // The Bit speaks when it acts, in the voice the browser has for it.
+    if (kind === "bit" && window.DiscWarsSound && DiscWarsSound.on && window.speechSynthesis) {
+      try {
+        var u = new SpeechSynthesisUtterance(info.mode === "yes" ? "Yes" : "No");
+        u.pitch = 0.1; u.rate = 0.85; u.volume = 1;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+      } catch (err) { /* no voice here */ }
+    }
+  });
+  if (typeof DiscWars.state === "function" && DiscWars.state().choosing) showPick(DiscWars.state().choosing);
 
   // ── What the sides have learned ───────────────────────────────────────
   var brainsBox = document.getElementById("brains");
@@ -966,9 +1033,11 @@
     soundBtn.hidden = true;
   } else {
     DiscWars.on(function (kind, info) {
-      // "out" shapes the tempo, "round" both that and the held notes;
-      // everything else is a sound.
+      // "out" and "round" shape the record -- the bassline, the last stand,
+      // a new hand -- and everything else is a sound.
       if (kind === "decide" || kind === "dopamine" || kind === "absorb" || kind === "record") return;   // the flies', not the kit's
+      if (kind === "discbreak") { DiscWarsSound.play("ring", info); return; }   // a disc shattering is a crash
+      if (kind === "flynn" || kind === "gridbugs") { DiscWarsSound.play("ring", info); return; }   // a comeback, a swarm: crashes too
       if (kind === "out") DiscWarsSound.mark(kind, info);
       else if (kind === "round") { DiscWarsSound.mark(kind); DiscWarsSound.play(kind, info); }
       else DiscWarsSound.play(kind, info);
@@ -979,7 +1048,7 @@
         return DiscWarsSound.live ? DiscWarsSound.syncThrow(windUp, team, name, champion) : windUp;
       });
     }
-    // The tempo rises with every fighter knocked out, so show where it is.
+    // Show the tempo on the button while Sound is on.
     setInterval(function () {
       if (!DiscWarsSound.on) return;
       var want = "Sound \u00b7 " + DiscWarsSound.bpm;

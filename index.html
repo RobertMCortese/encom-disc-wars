@@ -196,7 +196,7 @@
                        opacity: 0.6; color: var(--chrome-dim); margin-top: 2px; }
   .brains canvas.mb { width: 84px; height: 64px; display: block; }
   /* The Hall of Champions: every fighter ever crowned, kept in this browser.
-     Opened from its chip beside the match sizes; pick champions, put each
+     Opened from its chip at the top of the page; pick champions, put each
      on a side, and start a match with them. */
   .hall {
     position: fixed; inset: 0; z-index: 20;
@@ -275,6 +275,38 @@
   .pick button.opt b { display: block; color: var(--accent-hi); letter-spacing: 0.3em; font-weight: 700; margin-bottom: 4px; }
   .pick button.opt span { color: var(--chrome-dim); font-size: 9px; letter-spacing: 0.1em; line-height: 1.6; text-transform: none; }
   .pick button.opt:hover, .pick button.opt:focus-visible { border-color: var(--accent); outline: none; }
+  .pick button.opt i, .pick button.opt em {
+    display: block; font-style: normal; font-size: 8.5px; letter-spacing: 0.2em; color: var(--chrome-dim);
+  }
+  .pick button.opt i { margin-bottom: 5px; }
+  .pick button.opt em { margin-top: 6px; color: var(--accent); }
+
+  /* A champion's power tree, opened under its row in the Hall: a column a
+     branch, a band a tier. Held powers are lit, ones it could take next
+     are outlined, the rest wait; planned ones are dashed. */
+  .hall button.tree {
+    background: transparent; cursor: pointer; font: inherit; color: var(--chrome-dim);
+    border: 1px solid var(--rule); border-radius: 2px; padding: 2px 7px; margin-left: 8px;
+    font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; vertical-align: 1px;
+  }
+  .hall button.tree[aria-expanded="true"] { color: var(--accent-hi); border-color: var(--accent); }
+  .ptree {
+    grid-column: 1 / -1; display: grid; gap: 8px; padding: 8px 0 4px;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  }
+  .ptree .br > b { display: block; color: var(--accent-hi); font-weight: 700; letter-spacing: 0.3em; font-size: 9px; margin-bottom: 6px; }
+  .ptree .br > b small { color: var(--chrome-dim); font-weight: 400; letter-spacing: 0.14em; }
+  .ptree .tier { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+  .ptree .tier + .tier { padding-top: 4px; border-top: 1px dotted var(--rule); }
+  .ptree .nd {
+    border: 1px solid var(--rule); border-radius: 2px; padding: 4px 6px;
+    font-size: 8px; letter-spacing: 0.12em; line-height: 1.4; color: var(--chrome-dim);
+  }
+  .ptree .nd.held { border-color: var(--accent); color: var(--ink); background: var(--accent-hi); font-weight: 700; }
+  .ptree .nd.next { border-color: var(--accent); color: var(--chrome); }
+  .ptree .nd.locked { opacity: 0.55; }
+  .ptree .nd.soon { border-style: dashed; opacity: 0.45; }
+  .ptree .key { grid-column: 1 / -1; color: var(--chrome-dim); font-size: 8px; letter-spacing: 0.14em; line-height: 1.6; }
 
   .credit {
     font-size: 9px; letter-spacing: 0.04em; color: var(--chrome-dim);
@@ -390,6 +422,7 @@
     <div class="list" id="hall-list"></div>
     <footer>
       <div class="summary" id="hall-summary"></div>
+      <button type="button" class="x" id="hall-leave" hidden>Back to new programs</button>
       <button type="button" class="go" id="hall-start" disabled>Start Match</button>
     </footer>
   </div>
@@ -415,7 +448,7 @@
 <script src="flybrain.js?v=a96d3f61"></script>
 <script src="sound.js?v=c0011894"></script>
 <script src="poses.js?v=573e2db4"></script>
-<script src="discwars.js?v=458df2d6"></script>
+<script src="discwars.js?v=55ceaeae"></script>
 <script>
 (function () {
   "use strict";
@@ -517,50 +550,21 @@
   var themed = window.encomPalette && Object.keys(window.encomPalette).length > 0;
   if (embedded) document.body.classList.add("embedded");
 
-  // Match size: whatever the host asked for (#screensaver:3), else ?teams=,
-  // else what this viewer chose last, else the duel.
-  function wantedTeams() {
-    if (hash && /^[123]$/.test(hash[2] || "")) return Number(hash[2]);
-    var q = /[?&]teams=([123])\b/.exec(location.search);
-    if (q) return Number(q[1]);
-    try {
-      var saved = localStorage.getItem("discwars.teams");
-      if (saved && /^[123]$/.test(saved)) return Number(saved);
-    } catch (e) { /* private window, blocked storage: the duel is a fine default */ }
-    return 1;
-  }
-  var teams = wantedTeams();
-
+  // Every match is three a side, so there is no size to pick. Leaving a
+  // Hall match for an ordinary one is done from the Hall.
   var sizeBox = document.getElementById("sizes");
-  var sizeChips = {};
-  [1, 2, 3].forEach(function (n) {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "size";
-    b.id = "size-" + n;
-    b.textContent = n + "v" + n;
-    b.setAttribute("aria-pressed", String(n === teams));
-    b.addEventListener("click", function () { setTeams(n); });
-    sizeBox.appendChild(b);
-    sizeChips[n] = b;
-  });
 
-  function setTeams(n) {
+  function newMatch() {
     // Guard against a cached engine older than this page. Script URLs carry a
     // hash of their contents so the two cannot normally drift apart, but a
     // stale proxy or a hard-held cache still can, and the failure to avoid is
     // the silent one: a control that looks live and does nothing at all.
-    if (typeof DiscWars.setTeams !== "function") { stale(); return; }
-    teams = n;
+    if (typeof DiscWars.newMatch !== "function") { stale(); return; }
     var hc = document.getElementById("size-hall");
     if (hc) hc.setAttribute("aria-pressed", "false");
-    Object.keys(sizeChips).forEach(function (k) {
-      sizeChips[k].setAttribute("aria-pressed", String(Number(k) === n));
-    });
-    DiscWars.setTeams(n);
+    DiscWars.newMatch();
     boardKey = null; brainsKey = null; flyKey = null;
     drawBoard(); drawBrains();
-    try { localStorage.setItem("discwars.teams", String(n)); } catch (e) { /* fine */ }
   }
 
   // Say so, and offer the one thing that fixes it.
@@ -717,7 +721,51 @@
     if (e.key === "Escape" && !hallBox.hidden) closeHall();
   });
 
+  // The power tree, from the fight, for drawing a champion's progress.
+  var tree = typeof DiscWars.tree === "function" ? DiscWars.tree() : null;
+  var treeOpen = {};                               // record id -> its tree is open
+  function powerName(id) {
+    if (tree) for (var i = 0; i < tree.length; i++)
+      for (var j = 0; j < tree[i].nodes.length; j++) if (tree[i].nodes[j].id === id) return tree[i].nodes[j].name;
+    return "";
+  }
+  function drawTree(held) {
+    var hasT3 = false;
+    tree.forEach(function (br) { br.nodes.forEach(function (n) { if (n.tier === 3 && held.indexOf(n.id) >= 0) hasT3 = true; }); });
+    return '<div class="ptree">' + tree.map(function (br) {
+      var bands = [1, 2, 3].map(function (t) {
+        return '<div class="tier">' + br.nodes.filter(function (n) { return n.tier === t; }).map(function (n) {
+          var cls = "soon";
+          if (held.indexOf(n.id) >= 0) cls = "held";
+          else if (n.built) {
+            var ok = !n.needs.length || n.needs.some(function (x) { return held.indexOf(x) >= 0; });
+            cls = ok && !(n.tier === 3 && hasT3) ? "next" : "locked";
+          }
+          var why = n.built ? n.text : "Not built yet. " + n.text;
+          if (n.needs.length) why += " Grows from " + n.needs.map(powerName).join(" or ") + ".";
+          return '<div class="nd ' + cls + '" title="' + esc(why) + '">' + esc(n.name) + "</div>";
+        }).join("") + "</div>";
+      }).join("");
+      return '<div class="br"><b>' + esc(br.name) + "</b>" + bands + "</div>";
+    }).join("") + '<div class="key">Lit: held \u00b7 outlined: can be chosen next \u00b7 ' +
+      "one third-tier power at most</div></div>";
+  }
+  hallList.addEventListener("click", function (e) {
+    var b = e.target.closest("button.tree");
+    if (!b) return;
+    var id = b.closest(".row").getAttribute("data-id");
+    if (treeOpen[id]) delete treeOpen[id]; else treeOpen[id] = true;
+    drawHall();
+    var again = hallList.querySelector('.row[data-id="' + id + '"] button.tree');
+    if (again) again.focus();
+  });
+
+  // Shown only while a Hall match is on: the way back to ordinary matches.
+  var hallLeave = document.getElementById("hall-leave");
+  hallLeave.addEventListener("click", function () { newMatch(); closeHall(); });
+
   function drawHall() {
+    hallLeave.hidden = !(typeof DiscWars.state === "function" && DiscWars.state().hall);
     var list = readHall().sort(rankOrder);
     var ids = {};
     list.forEach(function (r) { ids[r.id] = true; });
@@ -736,9 +784,7 @@
         var st = r.stats || {};
         var moves = (r.combos || []).length;
         var fly = r.brain ? " · FLY " + (r.brain.decisions || 0) + " MOVES" : "";
-        var POWER_NAMES = { dual: "DUAL WIELD", "break": "DISC BREAK", bit: "BIT", shield: "MCP SHIELD",
-                            flynn: "POWER OF FLYNN", arm: "TESLER ARM", absorb: "MCP ABSORB", bugs: "GRID BUGS" };
-        var pw = (r.powers || []).map(function (id) { return POWER_NAMES[id] || ""; }).filter(Boolean);
+        var pw = (r.powers || []).map(function (id) { return powerName(id); }).filter(Boolean);
         fly += pw.length ? " · " + pw.join(" · ") : "";
         var id = esc(r.id);
         return '<div class="row' + (on ? " on" : "") + '" data-id="' + id + '">' +
@@ -749,13 +795,14 @@
             "<small>" + (r.rounds | 0) + ((r.rounds | 0) === 1 ? " ROUND HELD" : " ROUNDS HELD") +
             " · " + (st.kills | 0) + ((st.kills | 0) === 1 ? " KILL" : " KILLS") +
             " · " + (r.points | 0) + " PTS · " + moves + (moves === 1 ? " NAMED MOVE" : " NAMED MOVES") +
-            fly + "</small></div>" +
+            fly + "</small>" + (tree ? '<button type="button" class="tree" aria-expanded="' + !!treeOpen[r.id] +
+            '">Power tree</button>' : "") + "</div>" +
           '<div class="sides" role="radiogroup" aria-label="Side for ' + esc(r.name) + '">' +
             '<label class="a"><input type="radio" name="side-' + id + '" value="0"' +
               (side === 0 ? " checked" : "") + "> Programs</label>" +
             '<label class="b"><input type="radio" name="side-' + id + '" value="1"' +
               (side === 1 ? " checked" : "") + "> Sentinels</label>" +
-          "</div></div>";
+          "</div>" + (tree && treeOpen[r.id] ? drawTree(r.powers || []) : "") + "</div>";
       }).join("");
     }
     summarize();
@@ -787,13 +834,12 @@
   function summarize() {
     var c = counts(), total = c[0] + c[1];
     var ok = total > 0 && c[0] <= 3 && c[1] <= 3;
-    var a = c[0] || c[1], b = c[1] || c[0];
     var msg;
     if (!total) msg = "Tick champions to field them. The match size follows from how many.";
     else if (!ok) msg = '<span class="warn">At most three a side</span> — programs ' + c[0] + ", sentinels " + c[1] + ".";
     else {
-      msg = "<b>" + a + "v" + b + "</b> · programs " + c[0] + " · sentinels " + c[1];
-      if (!c[0] || !c[1]) msg += " — new programs fill the other side";
+      msg = "<b>3v3</b> · programs " + c[0] + " · sentinels " + c[1];
+      if (c[0] < 3 || c[1] < 3) msg += " — new programs fill the empty seats";
     }
     hallSummary.innerHTML = msg;
     hallStart.disabled = !ok;
@@ -808,7 +854,6 @@
       if (r.id in picked) roster[picked[r.id]].push(byId[r.id]);
     });
     if (!DiscWars.startHall(roster)) return;
-    Object.keys(sizeChips).forEach(function (k) { sizeChips[k].setAttribute("aria-pressed", "false"); });
     hallChip.setAttribute("aria-pressed", "true");
     boardKey = null; brainsKey = null; flyKey = null;
     drawBoard(); drawBrains();
@@ -829,8 +874,11 @@
       esc(info.name) + "</b> won the round" +
       (info.have.length ? " · holds " + info.have.map(esc).join(" · ") : "");
     pickList.innerHTML = info.options.map(function (o) {
-      return '<button type="button" class="opt" data-id="' + esc(o.id) + '"><b>' + esc(o.name) +
-             "</b><span>" + esc(o.text) + "</span></button>";
+      return '<button type="button" class="opt" data-id="' + esc(o.id) + '">' +
+             (o.branch ? "<i>" + esc(o.branch) + " \u00b7 TIER " + o.tier + "</i>" : "") +
+             "<b>" + esc(o.name) + "</b><span>" + esc(o.text) + "</span>" +
+             (o.opens && o.opens.length ? "<em>Opens " + o.opens.map(esc).join(" \u00b7 ") + "</em>" : "") +
+             "</button>";
     }).join("");
     pickBox.hidden = false;
     var first = pickList.querySelector("button");
@@ -1037,7 +1085,8 @@
       // a new hand -- and everything else is a sound.
       if (kind === "decide" || kind === "dopamine" || kind === "absorb" || kind === "record") return;   // the flies', not the kit's
       if (kind === "discbreak") { DiscWarsSound.play("ring", info); return; }   // a disc shattering is a crash
-      if (kind === "flynn" || kind === "gridbugs") { DiscWarsSound.play("ring", info); return; }   // a comeback, a swarm: crashes too
+      if (kind === "flynn" || kind === "gridbugs" || kind === "clusterburst" || kind === "recogslam" ||
+          kind === "athena" || kind === "rectify" || kind === "sailer" || kind === "blackhole") { DiscWarsSound.play("ring", info); return; }   // a comeback, a swarm: crashes too
       if (kind === "out") DiscWarsSound.mark(kind, info);
       else if (kind === "round") { DiscWarsSound.mark(kind); DiscWarsSound.play(kind, info); }
       else DiscWarsSound.play(kind, info);
@@ -1098,7 +1147,7 @@
   }
 
   function begin() {
-    DiscWars.init(canvas, teams);
+    DiscWars.init(canvas);
     drawBoard();
     if (themed) {
       DiscWars.setPalette(window.encomPalette);

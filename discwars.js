@@ -62,12 +62,11 @@
   var ceilY = 4.2;
   var centreX = 8.0;                 // the two ranks stand this far either side
   var rankGap = 5.4;                 // between teammates, across the arena's depth
-  // 1v1, 2v2 or 3v3. The arena, the camera and the number of duels running at
-  // once all follow from this.
-  var teamSize = 1;
-  // How many stand on each side. Equal in an ordinary match; a match set up
-  // from the Hall of Champions can be lopsided -- one against three, say.
-  var sideSize = [1, 1];
+  // Every match is three a side. The arena, the camera and the number of
+  // duels running at once all follow from this.
+  var SIDE = 3;
+  var teamSize = SIDE;
+  var sideSize = [SIDE, SIDE];
   // A match from the Hall: the champions picked for it keep their seats for
   // every round of it, and nobody new is crowned.
   var hall = false;
@@ -463,22 +462,16 @@
   var fs = [], ds = [], ringCircles = [];
 
 
-  // Lay out a match: two ranks of `n` facing each other across the arena,
+  // Lay out a match: two ranks of three facing each other across the arena,
   // each fighter on its own platform with its own four rings.
   // `roster`, when given, is [programs, sentinels]: saved champions to seat
-  // on each side. A side left empty is filled with new programs, as many as
-  // the other side has champions.
-  function buildMatch(n, roster) {
-    var clamp = function (k) { return Math.max(1, Math.min(3, k | 0)); };
+  // on each side, up to three a side.
+  // A seat in a Hall match that nobody was picked for gets a new program.
+  function buildMatch(roster) {
     hall = !!roster;
     lastWinner = -1;
-    if (roster) {
-      var a = roster[0].length, b = roster[1].length;
-      sideSize = [clamp(a || b), clamp(b || a)];
-    } else {
-      sideSize = [clamp(n), clamp(n)];
-    }
-    teamSize = Math.max(sideSize[0], sideSize[1]);
+    sideSize = [SIDE, SIDE];
+    teamSize = SIDE;
     arenaZ = Math.max(5.5, rankGap * (teamSize - 1) / 2 + 3.2);
     pads = []; fs = []; ds = []; ringCircles = [];
     for (var team = 0; team < 2; team++) {
@@ -505,7 +498,7 @@
     for (var g = 0; g < pads.length; g++)
       for (var k = 0; k < ringCount; k++)
         ringRadii[k].forEach(function (r) { if (r > 0) ringCircles.push([g, k, r]); });
-    queue = []; wallQueue = []; pieces = []; bugs = []; motes = [];
+    queue = []; wallQueue = []; pieces = []; bugs = []; motes = []; echoes = []; fx = [];
     rite = null;
     score = [0, 0]; banner = "";
     if (choosing) { choosing = null; emit("choose", null); }   // the fighter it was for is gone
@@ -720,7 +713,7 @@
 
     if (f.mode === "kneel") {
       // Down onto one knee, a hand to the floor, held, and back up at the end.
-      var kin = f.mt / 0.7, kout = (KNEEL_TIME - f.mt) / 0.7;
+      var kin = f.mt / 0.7, kout = ((f.kneelFor || KNEEL_TIME) - f.mt) / 0.7;
       var kw = ease(Math.max(0, Math.min(1, kin, kout)));
       var kt = evadePose("kneel", pose, 0);
       for (var kj = 0; kj < pose.length; kj++) pose[kj] += (kt[kj] - pose[kj]) * kw;
@@ -957,7 +950,7 @@
         // ends when a side is cleared, so this is also what stops two last
         // fighters hanging opposite each other with nobody able to act.
         if (ringUp(f.pad, f.clingRing)) { f.willClimb = true; setMode(p, "climb"); }
-        else { setMode(p, "fall"); eliminated(p, 0.9); }   // owns no exchange to pass on
+        else if (!sailerSave(p)) { setMode(p, "fall"); eliminated(p, 0.9); }   // owns no exchange to pass on
       }
     } else if (f.mode === "climb") {
       // Up and over the edge, onto the ring it was holding.
@@ -980,10 +973,18 @@
     } else if (f.mode === "kneel") {
       f.yOff = 0; f.alpha = 1;
       if (f.mt >= KNEEL_TIME && rite && rite.p === p) riteDone();
-      else if (f.mt >= KNEEL_TIME) setMode(p, "stand");
+      else if (f.mt >= (f.kneelFor || KNEEL_TIME)) { f.kneelFor = 0; setMode(p, "stand"); }
     } else if (f.mode === "bugged") {
       f.yOff = 0; f.alpha = 1;
       if (f.mt >= BUG_HOLD) setMode(p, "stand");    // shaken off at last
+    } else if (f.mode === "sail") {
+      // Carried in a Solar Sailer's beam: up off whatever it was going over,
+      // and set down in the middle of its own platform.
+      var su = Math.min(1, f.mt / 1.8), sp = pads[f.pad];
+      f.pos = [f.sail.from[0] + (sp.cx - f.sail.from[0]) * ease(su), f.sail.from[1] + (sp.cz - f.sail.from[1]) * ease(su)];
+      f.yOff = f.sail.y0 * (1 - ease(su)) + 1.6 * Math.sin(Math.PI * su);
+      f.alpha = 1;
+      if (su >= 1) { f.ring = 0; f.ang = 0; f.yOff = 0; f.sail = null; setMode(p, "stand"); }
     } else if (f.mode === "rez") {
       f.yOff = 0;
       f.alpha = Math.min(1, f.mt / 0.8);
@@ -996,8 +997,8 @@
   // Local pose (facing +x) to the world: placed at the fighter's spot and
   // turned to face the opponent.
   function toWorld(p, local, j) {
-    var f = fs[p], lx = local[j * 3], lz = local[j * 3 + 2];
-    return [f.pos[0] + f.fv[0] * lx - f.fv[1] * lz, local[j * 3 + 1] + f.yOff, f.pos[1] + f.fv[1] * lx + f.fv[0] * lz];
+    var f = fs[p], sc = f.scale || 1, lx = local[j * 3] * sc, lz = local[j * 3 + 2] * sc;
+    return [f.pos[0] + f.fv[0] * lx - f.fv[1] * lz, local[j * 3 + 1] * sc + f.yOff, f.pos[1] + f.fv[1] * lx + f.fv[0] * lz];
   }
   function ahead(p, w, d) { return [w[0] + fs[p].fv[0] * d, w[1], w[2] + fs[p].fv[1] * d]; }
   function canAct(p) { return fs[p].mode === "stand"; }
@@ -1682,6 +1683,7 @@
             ((f.mode === "stand" || f.mode === "bugged") && k === f.ring && !drop(q))) {
           // Nothing left to hold on to.
           if (finishing) learnPair(fs[p], "finish", 0, 0);   // it knows how to do that now
+          if (sailerSave(q)) { after(rand(0.7, 1.1), function () { rally(p); }); return; }
           setMode(q, "fall");
           // Taking a fighter out does not end the exchange unless it was the
           // last of its side; the thrower carries it on against whoever is left.
@@ -1714,6 +1716,7 @@
     throwFrom(p, function (from) {
       var disc = ds[p];
       if (byHand) { disc.arm = true; disc.trail = []; emit("arm", { team: fs[p].team, name: fs[p].name }); }
+      if (opts && opts.seq) sequence(p, q);
       if (viaZ != null) {
         // Spark it off the glass as it turns, the way a banked shot sparks
         // off the ceiling.
@@ -1748,8 +1751,12 @@
         return;
       }
       if (yes) call.through = true;
-      // A hand is half as easy to stop as a disc.
-      if (byHand && !call.through && Math.random() < 0.5) call.through = true;
+      // A hand is half as easy to stop as a disc; so is a throw from the
+      // last of a side in its Renegade mask, a giant, or a blur.
+      var rene = has(p, "renegade") && liveCount(fs[p].team) === 1;
+      if (rene && !fs[p].renegadeOn) { fs[p].renegadeOn = true; emit("renegade", { team: fs[p].team, name: fs[p].name }); }
+      var giant = fs[p].big > wall, hazy = fs[p].fuzzy > wall;
+      if ((byHand || rene || giant || hazy) && !call.through && Math.random() < 0.5) call.through = true;
 
       if (!call.through && call.guard === 1) {
         // Caught on the disc, held up across the chest.
@@ -1796,16 +1803,45 @@
       // palette would be nothing but these.
       if (!call.through && Math.random() < 0.15) learnPair(fs[q], "save", call.aim, call.guard);
 
+      // Rinzler's Reflexes: a throw that beat its guard may be dodged anyway.
+      var reflex = has(q, "rinzler") && canAct(q) && !yes && !stuck;
+      if (reflex && call.through && Math.random() < RINZ_DODGE) call.through = false;
+
       var know = fs[p].practised;
       var hard = fs[q].champion ? CHAMP.tough : 1;          // champions are harder to catch
       if (armOut(q)) hard *= ARM_OUT_HARD;                  // and harder still with the hand out
-      var land = CONNECT * hard * (byHand ? 2 : 1);              // a hand lands twice as often
+      var land = CONNECT * hard * (byHand || rene ? 2 : giant ? 1.5 : 1)   // a hand lands twice as often
+                 * (fs[q].big > wall ? 1.5 : 1);                          // and a giant is easy to hit
       if (call.through && (yes || Math.random() < land + edge(know && know.used, 0.18))) {
         // It found its mark: knocked back a ring and stunned, or derezzed.
         // The Bit's YES is the second: it does not knock anyone back.
         var hitAt = chestWorld(q);
         var hdur = rand(0.85, 1.05) * (viaZ == null ? 1 : 1.3) * slow;
         var hpts = shape(from, hitAt, rand(0.1, 0.4), viaZ);
+        // Black Guard Staff: the first one each round that would land is
+        // turned aside, off at an angle -- now and then into somebody else.
+        if (!yes && has(q, "staff") && !fs[q].staffUsed && alive(q)) {
+          fs[q].staffUsed = true;
+          var turnAt = ahead(q, chestWorld(q), 0.5);
+          fly(p, shape(from, turnAt, rand(0.1, 0.4), viaZ), hdur, function () {
+            spark(turnAt, hot(q));
+            fs[q].stats.blocks++;
+            emit("block", { team: fs[q].team, aim: call.aim, name: fs[q].name, tom: TOM_MID, lead: speaks(q) });
+            emit("staff", { team: fs[q].team, name: fs[q].name });
+            var near = [];
+            for (var r = 0; r < fs.length; r++) if (r !== q && r !== p && alive(r)) near.push(r);
+            var r2 = near.length && Math.random() < 0.3 ? near[Math.floor(Math.random() * near.length)] : -1;
+            var off = r2 >= 0 ? chestWorld(r2)
+                    : [turnAt[0] + rand(-3, 3), turnAt[1] + rand(1, 2.5), turnAt[2] + (Math.random() < 0.5 ? -1 : 1) * rand(3, 5)];
+            fly(p, arc(turnAt, off, rand(0.2, 0.6), null), rand(0.5, 0.7), function () {
+              spark(off, hot(p));
+              if (r2 >= 0 && canAct(r2)) { fs[p].stats.hits++; knockBack(r2); }
+              flyHome(p, off, null, disc);
+            }, disc);
+            after(rand(0.3, 0.5), function () { rally(q); });
+          }, disc);
+          return;
+        }
         // Unless a square of an MCP shield is in the way when it gets there.
         var sq = shieldSlot(q, hpts[hpts.length - 2], hdur);
         if (sq) {
@@ -1838,6 +1874,7 @@
               after(1.0, function () { rally(p); });
               return;
             }
+            if (!yes && glitchSave(q, hitAt)) { after(1.0, function () { rally(p); }); return; }
             shatter(q);
             spark(hitAt, "#ffffff");
             emit("derez", { team: fs[q].team });
@@ -1859,7 +1896,9 @@
       // which is what carries a fighter onto a fallen teammate's rings.
       if (!call.through) fs[q].stats.dodges++;   // ducked or jumped it clean
       var lateral = call.guard !== 1 && Math.random() < 0.45 && dodgeSpot(q);
-      var kind = lateral ? (Math.random() < 0.5 ? "sidestep" : "flip")
+      var counter = reflex && Math.random() < RINZ_COUNTER;   // it flips, and throws on landing
+      var kind = counter ? "flip"
+               : lateral ? (Math.random() < 0.5 ? "sidestep" : "flip")
                : call.guard === 0 ? (Math.random() < 0.5 ? "duck" : "sweep")
                : call.guard === 2 ? "split"
                : "duck";                                   // blocked with the disc away
@@ -1881,6 +1920,11 @@
           fs[q].evade = kind;
           setMode(q, "evade");
         }
+      });
+      if (counter) after(Math.max(0, dur2 * passAt - lead) + flipTime + 0.1, function () {
+        if (!alive(p) || !canAct(q) || fs[q].primed || !discReady(q)) return;
+        emit("rinzler", { team: fs[q].team, name: fs[q].name });
+        bodyShot(q, p, null);
       });
       glass[1] = pass;                               // still passes where it was aimed
       fly(p, shape(from, glass, 0, viaZ), dur2, function () {
@@ -2012,7 +2056,31 @@
         return;
       }
     }
+    // Ones that come over it and stay a while; the attack goes on regardless.
+    if (has(p, "sark") && !(fs[p].big > wall) && Math.random() < SARK_CHANCE) {
+      fs[p].big = wall + SARK_TIME;
+      emit("sark", { team: fs[p].team, name: fs[p].name });
+    }
+    if (has(p, "fuzzy") && !(fs[p].fuzzy > wall) && Math.random() < FUZZY_CHANCE) {
+      fs[p].fuzzy = wall + FUZZY_TIME;
+      emit("fuzzy", { team: fs[p].team, name: fs[p].name });
+    }
+    if (has(p, "athena") && Math.random() < ATHENA_CHANCE) summon(p);
+    if (has(p, "pool") && !fs[p].poolUsed && poolNeed(p) && Math.random() < POOL_CHANCE) {
+      drinkPool(p);
+      afterWall(1.9, function () { rally(p); });
+      return;
+    }
     if (has(p, "arm") && Math.random() < ARM_CHANCE) { bodyShot(p, q, null, { arm: true }); return; }
+    // Ones it sends out: they go on their own, and the exchange carries on.
+    var sent = null;
+    if (has(p, "prankster") && !fxOf(p, "hole") && Math.random() < PRANK_CHANCE) sent = prankster;
+    else if (has(p, "tank") && !fxOf(p, "tank") && Math.random() < TANK_CHANCE) sent = lightTank;
+    else if (has(p, "cycle") && !fxOf(p, "cycle") && Math.random() < CYCLE_CHANCE) sent = lightCycle;
+    else if (has(p, "recognizer") && !fxOf(p, "recog") && Math.random() < RECOG_CHANCE) sent = recognizer;
+    if (sent) { sent(p, q); after(0.6, function () { rally(p); }); return; }
+    if (has(p, "sequencer") && Math.random() < SEQ_CHANCE) { bodyShot(p, q, null, { seq: true }); return; }
+    if (has(p, "cluster") && Math.random() < CLUSTER_CHANCE) { clusterShot(p, q); return; }
     if (has(p, "bugs") && Math.random() < BUG_CHANCE && !swarmed(q)) {
       gridBugs(p, q);                              // they go on their own; the exchange carries on
       after(0.6, function () { rally(p); });
@@ -2038,8 +2106,7 @@
   // ── Powers ────────────────────────────────────────────────────────────
   // A fighter that wins a round chooses a power, one a win, and keeps every
   // one it has chosen for as long as it holds the title -- and in the Hall,
-  // for good. The fight waits while it chooses. A second disc and Power of
-  // Flynn both need a comrade, so they are not offered to a side of one.
+  // for good. The fight waits while it chooses.
   var POWERS = {
     dual: { name: "DUAL WIELD",
             text: "When a comrade falls, takes up their disc: two discs, twice the fire rate." },
@@ -2055,10 +2122,85 @@
            text: "About 1 in 23 attacks it launches its hand, slowly, trailing a light wall. Lands twice as often, stopped half as often, and it is hit half as often while the hand is out." },
     absorb: { name: "MCP ABSORB",
               text: "Every enemy that goes down, it takes in that enemy's moves and what its fly learned." },
+    sequencer: { name: "SEQUENCER DISC",
+                 text: "1 in 25 attacks, two more discs follow the first, a beat apart: three at one target, each to be guarded on its own." },
+    cluster: { name: "CLUSTER DISC",
+               text: "1 in 30 attacks, the disc bursts in the air in front of its target. The shards can catch it, or a comrade beside it." },
+    rinzler: { name: "RINZLER'S REFLEXES",
+               text: "Gets out of the way of a third of the throws that beat its guard, and off a dodge often throws straight back, while the other disc is still out." },
+    staff: { name: "BLACK GUARD STAFF",
+             text: "The first throw each round that would land on it is turned aside, off at an angle, sometimes into somebody else." },
+    pool: { name: "ENERGY POOL",
+            text: "Once a round, short a ring or shield squares, it kneels at a pool that wells up from its platform: two squares back, or a ring." },
+    sark: { name: "SARK'S ENLARGEMENT",
+            text: "1 in 40 attacks, the MCP makes it a giant for 15 seconds: its throws stopped half as often and landing half again as often, and throws at it landing half again as often." },
+    sailer: { name: "SOLAR SAILER RESCUE",
+              text: "Once a round, a comrade going over the edge is caught in a Solar Sailer's beam and set back down on its platform." },
+    iso: { name: "ISOMORPHIC GLITCH",
+           text: "Once a round, a hit that would derez it only makes it glitch and flicker." },
+    renegade: { name: "RENEGADE MASK",
+                text: "The last of its side standing, it masks up: every throw stopped half as often and landing twice as often." },
+    permanence: { name: "PERMANENCE CODE",
+                  text: "Programs its side calls in mid-round, Athena's and the Rectified, stay on its side for the match instead of the round." },
+    prankster: { name: "PRANKSTER BIT",
+                 text: "1 in 45 attacks, a Bit flies out and opens a black hole beside an opponent. It, and whoever stands near, may be pulled back a ring or off the edge." },
+    tank: { name: "LIGHT TANK",
+            text: "1 in 40 attacks, a light tank rolls out on the floor below and fires a slow bolt up at an opponent's ring. Dodged, never guarded." },
+    cycle: { name: "LIGHT CYCLE RUN",
+             text: "1 in 50 attacks, a light cycle rides through the other side's rank. Its wall takes out the ring under anybody in its path who does not jump it." },
+    recognizer: { name: "RECOGNIZER STRIKE",
+                  text: "1 in 50 attacks, a Recognizer comes down over an opponent and stamps out the ring it stands on, unless it gets clear in time." },
+    fuzzy: { name: "FUZZY SIGNATURE",
+             text: "1 in 30 attacks, it goes nearly invisible for 8 seconds, and its throws are stopped half as often." },
+    athena: { name: "ATHENA'S SUMMONS",
+              text: "1 in 40 attacks, with a comrade down, it calls a red program off the Grid onto the empty platform, to fight for the round." },
+    rectify: { name: "RECTIFICATION",
+               text: "1 in 4 enemies it takes out stream across to an empty platform on its side and rez there as its own." },
     bugs: { name: "GRID BUGS",
             text: "1 in 40 attacks, five grid bugs rise from the floor below it, scuttle to one opponent and climb on: 10 seconds wriggling, no throwing, no guarding." }
   };
-  var POWER_ORDER = ["dual", "break", "bit", "shield", "flynn", "arm", "absorb", "bugs"];
+  // Powers on the tree that are not built yet: shown on it, never offered.
+  var PLANNED = {};
+  // The tree: five branches, three tiers. A power past the first tier is
+  // offered once its holder has one of the powers it grows from (`needs`);
+  // a champion holds one third-tier power at most.
+  var TREE = [
+    { id: "disc", name: "DISC", nodes: [
+      { id: "dual", tier: 1 }, { id: "break", tier: 1 },
+      { id: "sequencer", tier: 2, needs: ["dual"] }, { id: "cluster", tier: 2, needs: ["break"] },
+      { id: "rinzler", tier: 3, needs: ["sequencer", "cluster"] } ] },
+    { id: "mcp", name: "MCP", nodes: [
+      { id: "shield", tier: 1 },
+      { id: "staff", tier: 2, needs: ["shield"] }, { id: "pool", tier: 2, needs: ["shield"] },
+      { id: "absorb", tier: 2, needs: ["shield"] },
+      { id: "sark", tier: 3, needs: ["absorb"] } ] },
+    { id: "user", name: "USER", nodes: [
+      { id: "flynn", tier: 1 }, { id: "sailer", tier: 1 },
+      { id: "iso", tier: 2, needs: ["flynn"] }, { id: "renegade", tier: 2, needs: ["sailer"] },
+      { id: "permanence", tier: 3, needs: ["iso"] } ] },
+    { id: "grid", name: "GRID", nodes: [
+      { id: "bit", tier: 1 }, { id: "bugs", tier: 1 },
+      { id: "prankster", tier: 2, needs: ["bit"] }, { id: "tank", tier: 2, needs: ["bugs"] },
+      { id: "cycle", tier: 3, needs: ["prankster", "tank"] }, { id: "recognizer", tier: 3, needs: ["tank"] } ] },
+    { id: "clu", name: "DILLINGER", nodes: [
+      { id: "arm", tier: 1 },
+      { id: "fuzzy", tier: 2, needs: ["arm"] }, { id: "athena", tier: 2, needs: ["arm"] },
+      { id: "rectify", tier: 3, needs: ["fuzzy"] } ] }
+  ];
+  var NODE = {};                                   // id -> { node, branch }
+  TREE.forEach(function (br) { br.nodes.forEach(function (n) { NODE[n.id] = { node: n, branch: br }; }); });
+  var POWER_ORDER = [];                            // built powers, in tree order
+  TREE.forEach(function (br) { br.nodes.forEach(function (n) { if (POWERS[n.id]) POWER_ORDER.push(n.id); }); });
+  var OFFER_SIZE = 4;
+  var SEQ_CHANCE = 1 / 25, SEQ_EXTRA = 2, SEQ_GAP = 0.22;   // fight seconds between discs
+  var CLUSTER_CHANCE = 1 / 30, CLUSTER_REACH = 6;           // metres: the next pad along is caught
+  var RINZ_DODGE = 0.35, RINZ_COUNTER = 0.6;
+  var SARK_CHANCE = 1 / 40, SARK_TIME = 15, SARK_SCALE = 1.7;   // real seconds; how much bigger
+  var FUZZY_CHANCE = 1 / 30, FUZZY_TIME = 8;
+  var ATHENA_CHANCE = 1 / 40, RECTIFY_CHANCE = 0.25, POOL_CHANCE = 0.35;
+  var PRANK_CHANCE = 1 / 45, TANK_CHANCE = 1 / 40, CYCLE_CHANCE = 1 / 50, RECOG_CHANCE = 1 / 50;
+  var RED = "#ff3b30";
+  function powerInfo(id) { return POWERS[id] || PLANNED[id] || null; }
   var BUG_CHANCE = 1 / 40, BUG_COUNT = 5, BUG_HOLD = 10, BUG_SPEED = 3.4;   // metres a second
   var BUG_EYE = "#b84dff", BUG_GREEN = "#4dff5e";
   var BREAK_CHANCE = 0.1, BIT_CHANCE = 0.1;
@@ -2070,12 +2212,51 @@
 
   function has(p, id) { return !!(fs[p] && fs[p].powers && fs[p].powers.indexOf(id) >= 0); }
 
-  // What a winner may choose from: what it does not have yet. A second disc
-  // has to come from a comrade, so it is not offered to a side of one.
+  // Whether `p` could take power `id` now: built, not held, grown from
+  // something it holds, and no second third-tier power.
+  function canTake(p, id) {
+    var at = NODE[id];
+    if (!at || !POWERS[id] || has(p, id)) return false;
+    var n = at.node;
+    if (n.needs && !n.needs.some(function (x) { return has(p, x); })) return false;
+    if (n.tier === 3 && fs[p].powers.some(function (x) { return NODE[x] && NODE[x].node.tier === 3; })) return false;
+    return true;
+  }
+  // What a winner may choose from: up to four of what it could take. One
+  // always starts a branch it has not touched, when there is one, and one
+  // always goes further up a branch it has, when there is one; the rest are
+  // drawn at random. Shown in tree order.
   function offerFor(p) {
-    return POWER_ORDER.filter(function (id) {
-      return !has(p, id) && !((id === "dual" || id === "flynn") && sideSize[fs[p].team] < 2);
+    var open = POWER_ORDER.filter(function (id) { return canTake(p, id); });
+    var started = {};
+    fs[p].powers.forEach(function (id) { if (NODE[id]) started[NODE[id].branch.id] = true; });
+    var out = [];
+    function draw(list) {
+      list = list.filter(function (id) { return out.indexOf(id) < 0; });
+      if (list.length && out.length < OFFER_SIZE) out.push(list[Math.floor(Math.random() * list.length)]);
+    }
+    draw(open.filter(function (id) { return NODE[id].node.tier === 1 && !started[NODE[id].branch.id]; }));
+    draw(open.filter(function (id) { return NODE[id].node.tier > 1; }));
+    while (out.length < Math.min(OFFER_SIZE, open.length)) draw(open);
+    return POWER_ORDER.filter(function (id) { return out.indexOf(id) >= 0; });
+  }
+  // The whole tree, for drawing it: every branch and power, built or not.
+  function treeInfo() {
+    return TREE.map(function (br) {
+      return { id: br.id, name: br.name, nodes: br.nodes.map(function (n) {
+        var pi = powerInfo(n.id);
+        return { id: n.id, name: pi.name, text: pi.text, tier: n.tier, needs: (n.needs || []).slice(),
+                 built: !!POWERS[n.id] };
+      }) };
     });
+  }
+  // What choosing `id` opens further up its branch.
+  function opensFrom(id) {
+    var at = NODE[id], out = [];
+    if (at) at.branch.nodes.forEach(function (n) {
+      if (n.needs && n.needs.indexOf(id) >= 0) out.push(powerInfo(n.id).name);
+    });
+    return out;
   }
   function choiceInfo() {
     if (!choosing) return null;
@@ -2083,7 +2264,8 @@
     return { name: f.name, team: f.team, rank: (rankOf(f.stats.rounds) || {}).name || null,
              have: f.powers.map(function (id) { return POWERS[id].name; }),
              options: choosing.options.map(function (id) {
-               return { id: id, name: POWERS[id].name, text: POWERS[id].text };
+               return { id: id, name: POWERS[id].name, text: POWERS[id].text,
+                        branch: NODE[id].branch.name, tier: NODE[id].node.tier, opens: opensFrom(id) };
              }) };
   }
   function grant(id) {
@@ -2097,6 +2279,503 @@
     emit("granted", { team: fs[p].team, name: fs[p].name, power: id });
     beginChains(0.6);
     return true;
+  }
+
+  // A throw that lands and derezzes, outside the run of an exchange: from
+  // a disc of a Sequencer's, or a Cluster's shard. A champion's free hit
+  // still holds. True if that ended the round.
+  function downBy(p, q, at) {
+    if (CHAMP.spared && fs[q].champion && !fs[q].spared) {
+      fs[q].spared = true;
+      spark(at, "#ffffff");
+      emit("spared", { team: fs[q].team, name: fs[q].name });
+      if (canAct(q)) knockBack(q);
+      return false;
+    }
+    if (glitchSave(q, at)) return false;
+    shatter(q);
+    spark(at, "#ffffff");
+    emit("derez", { team: fs[q].team });
+    setMode(q, "derez");
+    return eliminated(q, 3.0, p);
+  }
+
+  // Sequencer Disc. The real disc goes, then two more a beat apart, each
+  // a disc of light that is gone once it has done its work: guarded,
+  // landed or past. Each has its own aim and its own guard to beat, and
+  // none of them carries the exchange on -- the real one does that.
+  var echoes = [];
+  function sequence(p, q) {
+    emit("sequencer", { team: fs[p].team, name: fs[p].name });
+    for (var k = 1; k <= SEQ_EXTRA; k++) after(k * SEQ_GAP, function () { echoThrow(p, q); });
+  }
+  function echoThrow(p, q) {
+    if (!alive(p) || !alive(q) || fs[p].mode !== "stand") return;
+    var from = handWorld(p), e = { p: p, state: "back", pos: from, trail: [], flight: null };
+    var aim = Math.floor(Math.random() * 3), dur = rand(0.75, 0.9);
+    var gone = function () { e.state = "broken"; };
+    echoes.push(e);
+    fs[p].stats.throws++;
+    emit("throw", { team: fs[p].team, aim: aim, name: fs[p].name, lead: speaks(p), champion: !!fs[p].champion });
+    if (canAct(q) && Math.random() < 1 / 3) {
+      // The right guard: caught on the disc, and it comes apart there.
+      var to = ahead(q, chestWorld(q), 0.6);
+      fly(p, arc(from, to, rand(0.1, 0.5), null), dur, function () {
+        gone();
+        spark(to, hot(p));
+        fs[q].stats.blocks++;
+        emit("block", { team: fs[q].team, aim: aim, name: fs[q].name, tom: TOM_MID, lead: speaks(q) });
+      }, e);
+      return;
+    }
+    var hard = fs[q].champion ? CHAMP.tough : 1;
+    if (Math.random() < CONNECT * hard * 1.5) {
+      var hitAt = chestWorld(q), pts = arc(from, hitAt, rand(0.1, 0.4), null);
+      var sq = shieldSlot(q, pts[1], dur);
+      fly(p, sq ? arc(from, sq.at, rand(0.1, 0.4), null) : pts, dur, function () {
+        gone();
+        if (!alive(q)) return;
+        if (sq) {
+          spark(sq.at, hot(q));
+          fs[q].stats.blocks++;
+          emit("block", { team: fs[q].team, aim: aim, name: fs[q].name, tom: TOM_MID, lead: speaks(q) });
+          shieldHit(q, sq.slot, sq.at);
+          return;
+        }
+        spark(hitAt, hot(p));
+        fs[p].stats.hits++;
+        if (canAct(q) && Math.random() < 0.3) downBy(p, q, hitAt);
+        else if (canAct(q)) knockBack(q);
+      }, e);
+      return;
+    }
+    // Past it, one way or another, and off the glass.
+    var qp = pads[fs[q].pad];
+    var glass = [qp.cx > 0 ? 15.8 : -15.8, HEIGHT[aim] + rand(-0.08, 0.08), qp.cz + rand(-1.0, 1.0)];
+    var dur2 = rand(1.1, 1.25);
+    after(dur2 * 0.4, function () {
+      if (!canAct(q) || Math.random() < 0.5) return;
+      fs[q].evade = aim === 2 ? "split" : "duck";
+      setMode(q, "evade");
+    });
+    fly(p, arc(from, glass, 0, null), dur2, function () {
+      gone();
+      spark(glass, hot(p));
+      emit("bounce", { team: fs[p].team, tom: TOM_LOW });
+    }, e);
+  }
+
+  // Cluster Disc. Thrown at a point in the air just short of the target,
+  // where it bursts into shards; they catch the target, maybe, and maybe a
+  // comrade standing on the next pad along. The disc pulls itself back
+  // together where it burst and flies home.
+  function clusterShot(p, q) {
+    fs[p].lastThrowAim = 1;
+    throwFrom(p, function (from) {
+      var disc = ds[p], aimAt = chestWorld(q);
+      var at = lerp3(from, aimAt, 0.8);
+      at[1] += 0.3;
+      emit("cluster", { team: fs[p].team, name: fs[p].name });
+      fly(p, arc(from, at, rand(0.2, 0.5), null), rand(0.75, 0.9), function () {
+        shatterDisc(at, fs[p].team === 0 ? program : sentinel, hot(p));
+        spark(at, "#ffffff");
+        emit("clusterburst", { team: fs[p].team, name: fs[p].name });
+        var caught = [];
+        for (var r = 0; r < fs.length; r++) {
+          if (fs[r].team === fs[p].team || !alive(r)) continue;
+          if (r !== q && Math.hypot(fs[r].pos[0] - fs[q].pos[0], fs[r].pos[1] - fs[q].pos[1]) > CLUSTER_REACH) continue;
+          if (Math.random() < (r === q ? 0.5 : 0.3)) caught.push(r);
+        }
+        var ended = false;
+        after(0.15, function () {
+          caught.forEach(function (r) {
+            if (ended || !alive(r)) return;
+            if (canAct(r) && Math.random() < 0.3) {       // saw it coming
+              fs[r].evade = "duck"; setMode(r, "evade"); fs[r].stats.dodges++;
+              return;
+            }
+            var sq = shieldSlot(r, at, 0.05);
+            if (sq) { shieldHit(r, sq.slot, sq.at); return; }
+            var c = chestWorld(r);
+            spark(c, hot(p));
+            fs[p].stats.hits++;
+            if (canAct(r) && Math.random() < 0.3) ended = downBy(p, r, c);
+            else if (canAct(r)) knockBack(r);
+          });
+          if (!ended) after(caught.length ? 1.0 : 0.4, function () { rally(caught.length ? p : q); });
+        });
+        flyHome(p, at, null, disc);
+      }, disc);
+    });
+  }
+
+  // ── The rest of the tree ──────────────────────────────────────────────
+  function roundOn() { return banner === ""; }
+
+  // A ring taken out from under q by something that is not a disc -- a
+  // tank's bolt, a cycle's wall, a Recognizer's feet. q drops to a ring
+  // inside it, hangs from one, or falls. True if that ended the round.
+  function ringOut(by, q, pad, k) {
+    if (!ringUp(pad, k)) return false;
+    breakRing(pad, k);
+    fs[by].stats.rings++;
+    emit("ring", { team: pads[pad].team });
+    var f = fs[q];
+    if (!alive(q) || f.pad !== pad) return false;
+    if (((f.mode === "cling" || f.mode === "climb") && k === f.clingRing) ||
+        ((f.mode === "stand" || f.mode === "bugged") && k === f.ring && !drop(q))) {
+      if (sailerSave(q)) return false;
+      setMode(q, "fall");
+      return eliminated(q, 2.4, by);
+    }
+    return false;
+  }
+
+  // Solar Sailer Rescue: the first comrade of the round going over the
+  // edge is caught instead.
+  function sailerSave(q) {
+    if (!roundOn()) return false;
+    for (var s = 0; s < fs.length; s++) {
+      if (s === q || fs[s].team !== fs[q].team || !alive(s) || !has(s, "sailer") || fs[s].sailUsed) continue;
+      fs[s].sailUsed = true;
+      var f = fs[q];
+      if (!ringUp(f.pad, 0)) pads[f.pad].rings[0] = { s: "rising", t: wall };
+      f.sail = { from: f.pos.slice(), y0: f.yOff, by: s };
+      f.move = null; f.clingRing = -1; f.willClimb = false;
+      f.alpha = 1;
+      setMode(q, "sail");
+      spark(chestWorld(q), hot(s));
+      emit("sailer", { team: f.team, name: f.name, by: fs[s].name });
+      return true;
+    }
+    return false;
+  }
+
+  // Isomorphic Glitch: once a round, a derez that does not take.
+  function glitchSave(q, at) {
+    if (!has(q, "iso") || fs[q].glitched) return false;
+    fs[q].glitched = true;
+    fs[q].glitchT = wall;
+    spark(at, "#ffffff");
+    emit("glitch", { team: fs[q].team, name: fs[q].name });
+    return true;
+  }
+
+  // Energy Pool.
+  function poolNeed(p) {
+    var f = fs[p];
+    return !!(f.shield && has(p, "shield") && f.shield.indexOf(false) >= 0) || intactRings(p).length < ringCount;
+  }
+  function drinkPool(p) {
+    var f = fs[p];
+    f.poolUsed = true;
+    f.kneelFor = 1.7;
+    setMode(p, "kneel");
+    fx.push({ kind: "pool", p: p, at: [f.pos[0], f.pos[1]], t0: wall, done: false });
+    emit("pool", { team: f.team, name: f.name });
+  }
+
+  // A platform on `team`'s side that a program can be rezzed onto, with
+  // the fallen fighter whose place it takes: not a champion, not anybody
+  // fielded from the Hall, and not one still on its way down.
+  function emptySlot(team) {
+    if (!roundOn() || kneeling()) return null;
+    for (var c = 0; c < fs.length; c++) {
+      var f = fs[c];
+      if (f.team !== team || alive(c) || f.champion || f.seated) continue;
+      if (f.mode !== "gone" && f.mode !== "derez") continue;
+      var pad = f.home;
+      if (occupied(pad)) {
+        pad = -1;
+        for (var k = 0; k < pads.length; k++) if (pads[k].team === team && !occupied(k)) { pad = k; break; }
+      }
+      if (pad >= 0) return { c: c, pad: pad };
+    }
+    return null;
+  }
+  // Somebody else in fallen fighter c's place, rezzing in on `pad`.
+  function rezAs(c, pad, who) {
+    var f = fs[c];
+    f.name = who.name; f.cid = null; f.crowned = null;
+    f.stats = blankStats();
+    f.combos = who.combos || []; f.plan = null; f.prevAim = -1;
+    f.powers = []; f.shield = null; f.absorbed = 0;
+    f.brain = who.brain || freshBrain();
+    f.summoned = who.kind; f.tint = who.tint || null;
+    f.lastAim = -1; f.lastGuard = -1;
+    resetFighter(c, pad);
+    spark([pads[pad].cx, 1.2, pads[pad].cz], who.tint || hot(c));
+  }
+  // Permanence Code, in a Hall match: does a champion seated on `team`
+  // keep the programs its side calls in? (Seated champions' powers stay put
+  // from round to round, so asking in any order gives the same answer.)
+  function permanent(team) {
+    for (var i = 0; i < fs.length; i++) if (fs[i].team === team && fs[i].seated && has(i, "permanence")) return true;
+    return false;
+  }
+
+  // Athena's Summons: a red program off the Grid.
+  function summon(p) {
+    var slot = emptySlot(fs[p].team);
+    if (!slot) return;
+    var taken = fs.map(function (f) { return f.name; });
+    var name = taken.indexOf("ARES") < 0 ? "ARES" : freshName(taken);
+    rezAs(slot.c, slot.pad, { name: name, kind: "athena", tint: RED });
+    emit("athena", { team: fs[p].team, name: fs[p].name, program: name });
+  }
+
+  // Rectification: the enemy `by` just took out comes apart and streams
+  // across to an empty platform on `by`'s side, and rezzes there as one of
+  // its own -- its name, its moves, what its fly knew.
+  function rectify(by, e, absorbed) {
+    if (!fs[by] || by === e || fs[by].team === fs[e].team || !alive(by) || !has(by, "rectify")) return;
+    if (Math.random() >= RECTIFY_CHANCE) return;
+    var slot = emptySlot(fs[by].team);
+    if (!slot) return;
+    var g = fs[e], c = slot.c;
+    var who = { name: g.name, kind: "rectified",
+                brain: g.brain && flies() ? freshBrain().taughtBy(g.brain, g.name) : freshBrain(),
+                combos: g.combos.map(function (cb) {
+                  return { trig: cb.trig, from: cb.from, b: cb.b, used: cb.used, name: cb.name, inherited: cb.used };
+                }) };
+    fs[c].pos = [pads[slot.pad].cx, pads[slot.pad].cz];   // where the stream goes
+    fs[c].yOff = 0;
+    if (!absorbed) dissolve(e, [c]);
+    emit("rectify", { team: fs[by].team, name: fs[by].name, from: g.name });
+    afterWall(1.6, function () {
+      if (!roundOn() || alive(c) || occupied(slot.pad)) return;
+      rezAs(c, slot.pad, who);
+    });
+  }
+
+  // Things sent out into the arena: a Prankster Bit and its black hole, a
+  // light tank, a light cycle, a Recognizer, and the pool a champion
+  // kneels at. Each runs on real time from t0 and goes when it is done.
+  var fx = [];
+  function fxOf(p, kind) {
+    for (var i = 0; i < fx.length; i++) if (fx[i].p === p && fx[i].kind === kind) return true;
+    return false;
+  }
+  function prankster(p, q) {
+    var c = chestWorld(q), side = Math.random() < 0.5 ? -1 : 1;
+    fx.push({ kind: "hole", p: p, q: q, from: (fs[p].bitAt || chestWorld(p)).slice(), t0: wall,
+              at: [c[0] - fs[q].fv[0] * 0.2, c[1] + 0.3, c[2] + side * 1.1], open: false, pulled: false });
+    emit("prankster", { team: fs[p].team, name: fs[p].name });
+  }
+  function lightTank(p, q) {
+    var z0 = (Math.random() < 0.5 ? -1 : 1) * (arenaZ + 4);
+    fx.push({ kind: "tank", p: p, q: q, x: 0, z0: z0, z1: pads[fs[q].pad].cz, t0: wall,
+              fired: false, dodge: false, hit: false, aim: null });
+    emit("tank", { team: fs[p].team, name: fs[p].name });
+  }
+  function lightCycle(p, q) {
+    var dir = Math.random() < 0.5 ? 1 : -1;
+    fx.push({ kind: "cycle", p: p, line: fs[q].pos[0] + rand(-0.6, 0.6), dir: dir,
+              z0: -dir * (arenaZ + 3), z1: dir * (arenaZ + 3), t0: wall, dur: 3.0, trail: [], passed: {} });
+    emit("cycle", { team: fs[p].team, name: fs[p].name });
+  }
+  function recognizer(p, q) {
+    fx.push({ kind: "recog", p: p, q: q, t0: wall, pad: fs[q].pad, k: fs[q].ring,
+              at: [fs[q].pos[0], fs[q].pos[1]], dodge: false, slammed: false });
+    emit("recognizer", { team: fs[p].team, name: fs[p].name });
+  }
+
+  // A wireframe box: centre, half-sizes.
+  function box(c, h, col, a, w) {
+    var P = [];
+    for (var i = 0; i < 8; i++)
+      P.push(project([c[0] + (i & 1 ? h[0] : -h[0]), c[1] + (i & 2 ? h[1] : -h[1]), c[2] + (i & 4 ? h[2] : -h[2])]));
+    for (var n = 0; n < 8; n++) if (P[n][2] <= 0.2) return;
+    [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]].forEach(function (e) {
+      seg(1000 - (P[e[0]][2] + P[e[1]][2]) * 10, P[e[0]], P[e[1]], w || 1.5, col, a);
+    });
+  }
+  function ring3(c, r, col, a, w, n, plane) {
+    var prev = null;
+    for (var i = 0; i <= (n || 24); i++) {
+      var t = 2 * Math.PI * i / (n || 24);
+      var pt = plane === "yz" ? [c[0], c[1] + Math.sin(t) * r, c[2] + Math.cos(t) * r]
+                              : [c[0] + Math.cos(t) * r, c[1], c[2] + Math.sin(t) * r];
+      var s2 = project(pt);
+      if (prev && s2[2] > 0.2 && prev[2] > 0.2) seg(1000 - (s2[2] + prev[2]) * 10, prev, s2, w || 1.5, col, a);
+      prev = s2;
+    }
+  }
+  function lineW(a, b, col, alpha, w, cap) {
+    var A = project(a), B = project(b);
+    if (A[2] <= 0.2 || B[2] <= 0.2) return;
+    seg(1000 - (A[2] + B[2]) * 10, A, B, w, col, alpha, cap);
+  }
+
+  function stepFx() {
+    // Anybody in a Solar Sailer's beam: the beam, and the sailer up top.
+    fs.forEach(function (f, i) {
+      if (f.mode !== "sail" || !f.sail) return;
+      var col = hot(f.sail.by), c = chestWorld(i), top = [c[0], ceilY - 0.4, c[2]];
+      lineW(top, c, col, 0.18, Math.max(6, 0.5 * cam.F / project(c)[2]), "round");
+      lineW(top, c, col, 0.8, 2, "round");
+      var A = [top[0] - 1.6, top[1] + 0.1, top[2]], B = [top[0] + 1.6, top[1] + 0.1, top[2]], C = [top[0], top[1] - 0.25, top[2] + 1.2];
+      lineW(A, B, col, 0.9, 2); lineW(B, C, col, 0.9, 2); lineW(C, A, col, 0.9, 2);
+      lineW([top[0], top[1] + 0.1, top[2]], [top[0], top[1] + 1.2, top[2] - 0.3], col, 0.7, 1.5);
+    });
+    if (!fx.length) return;
+    var live = [];
+    fx.forEach(function (e) {
+      var u = wall - e.t0, col = hot(e.p), keepIt = true;
+      if (e.kind === "pool") {
+        // Wells up from the platform under it, bright, and drains away.
+        var r = 0.75 * ease(Math.min(1, u / 0.5)), a = u < 1.6 ? 1 : Math.max(0, 1 - (u - 1.6) / 0.6);
+        for (var k = 1; k <= 4; k++) ring3([e.at[0], 0.03, e.at[1]], r * k / 4, col, 0.5 * a, k === 4 ? 2 : 1, 24);
+        for (var m = 0; m < 6; m++) {
+          var ang = m * 1.047 + wall, h = ((u * 1.3 + m * 0.17) % 1) * 1.4;
+          lineW([e.at[0] + Math.cos(ang) * r * 0.6, h, e.at[1] + Math.sin(ang) * r * 0.6],
+                [e.at[0] + Math.cos(ang) * r * 0.6, h + 0.15, e.at[1] + Math.sin(ang) * r * 0.6], col, a * (1 - h / 1.4), 2, "round");
+        }
+        if (!e.done && u >= 1.0) {
+          e.done = true;
+          var f = fs[e.p];
+          spark(chestWorld(e.p), col);
+          if (f.shield && has(e.p, "shield") && f.shield.indexOf(false) >= 0) {
+            for (var sq = 0, back = 0; sq < f.shield.length && back < 2; sq++) if (!f.shield[sq]) { f.shield[sq] = true; back++; }
+            keep(e.p);
+          } else {
+            for (var rk = 0; rk < ringCount; rk++)
+              if (!ringUp(f.pad, rk)) { pads[f.pad].rings[rk] = { s: "rising", t: wall }; break; }
+          }
+          emit("pooldrunk", { team: f.team, name: f.name });
+        }
+        keepIt = u < 2.2;
+      } else if (e.kind === "hole") {
+        if (u < 1.0) {
+          // The Bit on its way, tumbling.
+          var t = ease(u), pos = lerp3(e.from, e.at, t);
+          pos[1] += 0.8 * Math.sin(Math.PI * u);
+          var s = project(pos), rr = Math.max(3, 0.09 * cam.F / s[2]), sp2 = wall * 9;
+          if (s[2] > 0.2) for (var d = 0; d < 4; d++) {
+            var a0 = sp2 + d * 1.571, a1 = a0 + 1.571;
+            seg(1000 - s[2] * 20 + 2, [s[0] + Math.cos(a0) * rr, s[1] + Math.sin(a0) * rr], [s[0] + Math.cos(a1) * rr, s[1] + Math.sin(a1) * rr], 1.5, BIT_REST, 1);
+          }
+        } else {
+          if (!e.open) { e.open = true; emit("blackhole", { team: fs[e.p].team }); }
+          // The hole: a black core with light spiralling into it.
+          var hs = project(e.at), grow = Math.min(1, (u - 1.0) / 0.4) * (u > 4.0 ? Math.max(0, 1 - (u - 4.0) / 0.5) : 1);
+          var R = 0.7 * grow * cam.F / hs[2];
+          if (hs[2] > 0.2 && R > 1) {
+            seg(1000 - hs[2] * 20 + 1, [hs[0] - 0.5, hs[1]], [hs[0] + 0.5, hs[1]], R * 0.7, "#000000", 1, "round");
+            for (var arm = 0; arm < 3; arm++) {
+              var prev = null;
+              for (var st = 0; st <= 12; st++) {
+                var rf = 1 - st / 12, an = arm * 2.094 + st * 0.45 - wall * 5;
+                var pt = [hs[0] + Math.cos(an) * R * rf, hs[1] + Math.sin(an) * R * rf * 0.6];
+                if (prev) seg(1000 - hs[2] * 20 + 1.5, prev, pt, 1.5, "#b84dff", 0.9 * rf + 0.1);
+                prev = pt;
+              }
+            }
+          }
+          if (!e.pulled && u >= 2.0) {
+            e.pulled = true;
+            for (var r2 = 0; r2 < fs.length; r2++) {
+              if (fs[r2].team === fs[e.p].team || !alive(r2)) continue;
+              if (Math.hypot(fs[r2].pos[0] - e.at[0], fs[r2].pos[1] - e.at[2]) > 3.5) continue;
+              if ((canAct(r2) || fs[r2].mode === "bugged") && Math.random() < (r2 === e.q ? 0.7 : 0.4)) {
+                spark(chestWorld(r2), "#b84dff");
+                knockBack(r2);
+              }
+            }
+          }
+        }
+        keepIt = u < 4.5;
+      } else if (e.kind === "tank") {
+        // Rolls in along the floor, turns its gun up, fires, and rolls off.
+        var zt = u < 1.4 ? e.z0 + (e.z1 - e.z0) * ease(u / 1.4)
+               : u < 3.4 ? e.z1 : e.z1 + (e.z0 - e.z1) * ease(Math.min(1, (u - 3.4) / 1.6));
+        var base = [e.x, floorY + 0.3, zt], tur = [e.x, floorY + 0.68, zt];
+        if (!e.fired && u >= 1.6) {
+          e.fired = true;
+          if (alive(e.q)) {
+            e.pad = fs[e.q].pad; e.k = fs[e.q].ring;
+            e.aim = [fs[e.q].pos[0], 0, fs[e.q].pos[1]];
+            emit("tankfire", { team: fs[e.p].team });
+          }
+        }
+        var gunTo = e.aim || [e.x + (fs[e.p].team === 0 ? 1 : -1) * 3, 0, zt];
+        var gd = norm(sub(gunTo, tur));
+        box(base, [0.6, 0.25, 0.95], col, 0.95, 1.6);
+        box(tur, [0.35, 0.13, 0.4], col, 0.95, 1.4);
+        lineW(tur, [tur[0] + gd[0] * 1.1, tur[1] + gd[1] * 1.1, tur[2] + gd[2] * 1.1], col, 1, 2.5, "round");
+        if (e.aim && u >= 1.6 && u < 3.2) {
+          // The bolt: slow, red, and coming.
+          var bu = (u - 1.6) / 1.6, bp = lerp3(tur, e.aim, bu), bb = lerp3(tur, e.aim, Math.max(0, bu - 0.08));
+          lineW(bb, bp, RED, 1, Math.max(3, 0.12 * cam.F / project(bp)[2]), "round");
+          if (!e.dodge && u >= 2.7) {
+            e.dodge = true;
+            var spot = canAct(e.q) && Math.random() < 0.45 && dodgeSpot(e.q);
+            if (spot) { play(e.q, "dodge", 1.3); relocate(e.q, spot[0], spot[1], spot[2], 0.5, 0.2); fs[e.q].stats.dodges++; }
+          }
+        }
+        if (e.aim && !e.hit && u >= 3.2) {
+          e.hit = true;
+          spark(e.aim, RED);
+          ringOut(e.p, e.q, e.pad, e.k);
+        }
+        keepIt = u < 5.1;
+      } else if (e.kind === "cycle") {
+        var cu = Math.min(1, u / e.dur), cz = e.z0 + (e.z1 - e.z0) * cu;
+        if (u <= e.dur) {
+          e.trail.push(cz);
+          for (var r3 = 0; r3 < fs.length; r3++) {
+            if (e.passed[r3] || fs[r3].team === fs[e.p].team || !alive(r3)) continue;
+            if ((cz - fs[r3].pos[1]) * e.dir < 0) continue;
+            e.passed[r3] = true;
+            if (Math.abs(fs[r3].pos[0] - e.line) > 1.1) continue;
+            if (canAct(r3) && Math.random() < 0.3) { fs[r3].evade = "split"; setMode(r3, "evade"); fs[r3].stats.dodges++; continue; }
+            spark([e.line, 0.5, fs[r3].pos[1]], col);
+            ringOut(e.p, r3, fs[r3].pad, fs[r3].ring);
+          }
+        }
+        // The wall it lays: a bright top edge, a dim foot, ribs between.
+        var wa = u <= e.dur ? 1 : Math.max(0, 1 - (u - e.dur) / 2.0);
+        for (var g = 1; g < e.trail.length; g += 2) {
+          var z0 = e.trail[g - 1], z1 = e.trail[g];
+          lineW([e.line, 0.9, z0], [e.line, 0.9, z1], col, 0.95 * wa, 2.5, "round");
+          lineW([e.line, 0.02, z0], [e.line, 0.02, z1], col, 0.5 * wa, 1);
+          if (g % 6 === 1) lineW([e.line, 0.02, z0], [e.line, 0.9, z0], col, 0.25 * wa, 1);
+        }
+        if (u <= e.dur) {
+          var fz = cz + e.dir * 0.55, bz = cz - e.dir * 0.55;
+          ring3([e.line, 0.32, fz], 0.32, col, 1, 2, 16, "yz");
+          ring3([e.line, 0.32, bz], 0.32, col, 1, 2, 16, "yz");
+          lineW([e.line, 0.5, bz], [e.line, 0.62, fz], col, 1, 3, "round");
+          lineW([e.line, 0.62, cz], [e.line, 0.85, cz - e.dir * 0.15], col, 1, 3, "round");
+        }
+        keepIt = u < e.dur + 2.2;
+      } else if (e.kind === "recog") {
+        // Comes down out of the dark over the target, hangs, stamps, and goes.
+        var yb = u < 1.6 ? 1.0 + (ceilY + 5 - 1.0) * (1 - ease(u / 1.6))
+               : u < 1.9 ? 1.0 * (1 - (u - 1.6) / 0.3)
+               : u < 2.5 ? 0 : (ceilY + 5) * ease(Math.min(1, (u - 2.5) / 1.5));
+        var ax = e.at[0], az = e.at[1], ra = u < 3.4 ? 1 : Math.max(0, 1 - (u - 3.4) / 0.6);
+        if (u < 1.9) ring3([ax, 0.02, az], 1.3 * Math.min(1, u / 1.6), RED, 0.35, 2, 24);   // its shadow
+        [-1, 1].forEach(function (sd) { box([ax + sd * 1.0, yb + 1.1, az], [0.18, 1.1, 0.35], col, ra, 2); });
+        box([ax, yb + 2.45, az], [1.3, 0.25, 0.45], col, ra, 2);
+        box([ax, yb + 1.9, az], [0.38, 0.32, 0.42], col, ra, 1.6);
+        lineW([ax - 0.25, yb + 1.8, az + 0.43], [ax + 0.25, yb + 1.8, az + 0.43], col, ra, 3, "round");
+        if (!e.dodge && u >= 1.2) {
+          e.dodge = true;
+          var spot2 = canAct(e.q) && Math.random() < 0.4 && dodgeSpot(e.q);
+          if (spot2) { startFlip(e.q); relocate(e.q, spot2[0], spot2[1], spot2[2], flipTime, 0); fs[e.q].stats.dodges++; }
+        }
+        if (!e.slammed && u >= 1.9) {
+          e.slammed = true;
+          spark([ax - 1.0, 0, az], "#ffffff"); spark([ax + 1.0, 0, az], "#ffffff");
+          emit("recogslam", { team: fs[e.p].team });
+          ringOut(e.p, e.q, e.pad, e.k);
+        }
+        keepIt = u < 4.0;
+      }
+      if (keepIt) live.push(e);
+    });
+    fx = live;
   }
 
   // Disc Break. A disc that meets another -- a block, a catch, a clash in
@@ -2559,7 +3238,10 @@
     if (takers.length) dissolve(p, takers);
     // Called once per fighter per round, so it is what the tempo counts.
     emit("out", { team: fs[p].team, left: liveCount(fs[p].team) });
-    if (liveCount(fs[p].team) > 0) return false;   // its side fights on without it
+    if (liveCount(fs[p].team) > 0) {               // its side fights on without it
+      if (by != null) rectify(by, p, takers.length > 0);
+      return false;
+    }
     var winner = 1 - fs[p].team;
     lastWinner = winner;
     score[winner]++;
@@ -2593,6 +3275,8 @@
         keep(n);
         continue;
       }
+      if (f.summoned && permanent(f.team)) continue;   // Permanence Code: kept by a seated champion
+      f.summoned = null; f.tint = null;
       f.name = freshName(taken);
       f.stats = blankStats();
       f.combos = []; f.plan = null; f.prevAim = -1;
@@ -2659,9 +3343,13 @@
       if (champ >= 0 && fs[champ].brain) fs[champ].brain.clearTrace();   // last round is paid for
 
       var taken = champ >= 0 ? [fs[champ].name] : [];
+      // Permanence Code: the champion's side keeps the programs it called in.
+      var keepSide = champ >= 0 && has(champ, "permanence") ? fs[champ].team : -1;
       for (var n = 0; n < fs.length; n++) {
         fs[n].champion = (n === champ);
         if (n === champ) continue;
+        if (fs[n].summoned && fs[n].team === keepSide) { fs[n].foe = -1; taken.push(fs[n].name); continue; }
+        fs[n].summoned = null; fs[n].tint = null;
         fs[n].name = freshName(taken);               // a new program on that platform
         fs[n].cid = null; fs[n].crowned = null;
         fs[n].stats = blankStats();
@@ -2688,8 +3376,12 @@
 
     for (var g = 0; g < pads.length; g++) restoreRings(g);
     for (var i = 0; i < fs.length; i++) resetFighter(i, fs[i].home);
+    fs.forEach(function (f) {                      // the once-a-round powers come back
+      f.staffUsed = false; f.poolUsed = false; f.glitched = false; f.sailUsed = false;
+      f.renegadeOn = false; f.big = 0; f.fuzzy = 0; f.kneelFor = 0;
+    });
     // Anything still queued belongs to the round that just ended.
-    queue = []; wallQueue = []; bugs = [];
+    queue = []; wallQueue = []; bugs = []; echoes = []; fx = [];
     rite = null;                                   // resetFighter has stood everybody back up
     banner = "";
     // The winner chooses a power before anybody throws. The arena waits for
@@ -2810,9 +3502,18 @@
       updateMode(p);
       var f = fs[p];
       if (f.mode === "gone" || f.mode === "derez") return;
-      var col = f.team === 0 ? program : sentinel, alpha = f.alpha;
+      var sc = f.scale || 1;
+      f.scale = sc + ((f.big > wall ? SARK_SCALE : 1) - sc) * Math.min(1, realDt * 2.5);
+      var col = f.tint || (f.team === 0 ? program : sentinel), alpha = f.alpha;
+      if (f.fuzzy > wall) alpha *= 0.16 + 0.08 * Math.sin(wall * 23 + p);   // Fuzzy Signature
+      var glitching = wall - (f.glitchT || -9) < 1.4;
+      if (glitching && Math.random() < 0.45) alpha *= 0.25;                  // Isomorphic Glitch
       var S = [];
       for (var j = 0; j < 20; j++) S.push(project(toWorld(p, local, j)));
+      if (glitching && Math.random() < 0.35) {
+        var gx = rand(-9, 9);
+        S.forEach(function (sp) { sp[0] += gx; });
+      }
       // With its hand launched, the arm ends at the wrist.
       var handOut = armOut(p);
       // Kneeling for Power of Flynn: a glow all round the figure.
@@ -2821,7 +3522,7 @@
       for (var k = 0; k < limbs.length; k++) {
         if (handOut && limbs[k][1] === 19) continue;
         var lb = limbs[k], a1 = S[lb[0]], b1 = S[lb[1]], depth = (a1[2] + b1[2]) / 2;
-        var lw = Math.max(2, lb[2] * cam.F / depth);
+        var lw = Math.max(2, lb[2] * f.scale * cam.F / depth);
         if (fg) {
           seg(1000 - depth * 20 - 0.6, a1, b1, lw + 14, fhi, 0.12 * fg * alpha, "round");
           seg(1000 - depth * 20 - 0.5, a1, b1, lw + 6, fhi, 0.3 * fg * alpha, "round");
@@ -2829,7 +3530,7 @@
         limb(1000 - depth * 20, a1, b1, lw, fg ? fhi : col, alpha);
       }
       var hc = project(lerp3(toWorld(p, local, 10), toWorld(p, local, 11), 0.55));
-      var hs = 0.24 * cam.F / hc[2];
+      var hs = 0.24 * f.scale * cam.F / hc[2];
       if (fg) seg(1000 - hc[2] * 20 + 0.5, [hc[0] - 0.5, hc[1]], [hc[0] + 0.5, hc[1]], hs * 1.9, fhi, 0.22 * fg * alpha, "round");
       var hd = put("head", 1000 - hc[2] * 20 + 1);
       hd.x = hc[0] - hs / 2; hd.y = hc[1] - hs * 0.56;
@@ -2841,8 +3542,19 @@
       // The name over the head, and above that, if it is the champion, the
       // rank it has climbed to by holding on.
       var nameTop = hc[1] - hs * 1.75;
-      var lit = f.team === 0 ? programHi : sentinelHi;
+      var lit = f.tint || (f.team === 0 ? programHi : sentinelHi);
       var zAt = 1000 - hc[2] * 20 + 2;
+      // Renegade Mask: a band of light across the face of the last one standing.
+      if (has(p, "renegade") && liveCount(f.team) === 1)
+        seg(zAt - 0.5, [hc[0] - hs * 0.55, hc[1] - hs * 0.08], [hc[0] + hs * 0.55, hc[1] - hs * 0.08],
+            Math.max(2, hs * 0.22), lit, alpha, "round");
+      // Black Guard Staff, slung across the back until it is used.
+      if (has(p, "staff") && !f.staffUsed) {
+        var cw = toWorld(p, local, 9), sd = [-f.fv[1], f.fv[0]], bk = 0.18 * f.scale;
+        var sa = project([cw[0] - f.fv[0] * bk + sd[0] * 0.35 * f.scale, cw[1] - 0.95 * f.scale, cw[2] - f.fv[1] * bk + sd[1] * 0.35 * f.scale]);
+        var sb = project([cw[0] - f.fv[0] * bk - sd[0] * 0.35 * f.scale, cw[1] + 0.75 * f.scale, cw[2] - f.fv[1] * bk - sd[1] * 0.35 * f.scale]);
+        seg(1000 - (sa[2] + sb[2]) * 10 - 2, sa, sb, Math.max(1.5, 0.035 * cam.F / sa[2]), lit, alpha * 0.9, "round");
+      }
       nameAt(f.name, hc[0], nameTop, hs * 0.62,
              f.champion ? lit : col, alpha * (f.champion ? 1 : 0.8), zAt);
       if (f.champion) rankAt(f.stats.rounds, hc[0], nameTop - hs * 0.42, hs * 0.23, lit, alpha, zAt);
@@ -2864,6 +3576,8 @@
       drawDisc(p, ds[p], false);
       if (fs[p].spare) drawDisc(p, fs[p].spare, true);
     });
+    echoes.forEach(function (e) { drawDisc(e.p, e, false); });
+    echoes = echoes.filter(function (e) { return e.state !== "broken"; });
     function drawDisc(p, d, second) {
       var f = fs[p];
       if (d.state === "broken") return;
@@ -2940,6 +3654,7 @@
     if (pieces.length) stepPieces(realDt);
     if (bugs.length) stepBugs(realDt);
     if (motes.length) stepMotes();
+    stepFx();
 
     for (var n = 0; n < sparkData.length; n++) {
       var sd = sparkData[n];
@@ -3010,14 +3725,16 @@
     // The winner's power, chosen from what "choose" offered. The next round
     // starts once it is given.
     grant: grant,
+    // The power tree: [{ id, name, nodes: [{ id, name, text, tier, needs, built }] }].
+    tree: treeInfo,
     // Listen to the fight: ("throw"|"block", { team, aim }).
     on: function (fn) { if (typeof fn === "function") listeners.push(fn); },
     // Something to keep time with: fn(windUp, team, name, champion) -> real seconds from now
     // until the release, or null for none. See throwFrom.
     setBeatClock: function (fn) { beatClock = typeof fn === "function" ? fn : null; },
-    // 1 for the duel, 2 or 3 for a team match. Restarts the fight.
-    setTeams: function (n) {
-      buildMatch(n);
+    // An ordinary match, three new programs a side. Restarts the fight.
+    newMatch: function () {
+      buildMatch();
       for (var i = 0; i < teamSize; i++) after(0.8 + i * 0.35, startChain);
     },
     get teams() { return teamSize; },
@@ -3027,7 +3744,7 @@
       if (!roster || roster.length !== 2) return false;
       var a = (roster[0] || []).slice(0, 3), b = (roster[1] || []).slice(0, 3);
       if (!a.length && !b.length) return false;
-      buildMatch(0, [a, b]);
+      buildMatch([a, b]);
       for (var i = 0; i < teamSize; i++) after(0.8 + i * 0.35, startChain);
       return true;
     },
@@ -3074,11 +3791,11 @@
         })
       };
     },
-    init: function (el, n) {
+    init: function (el) {
       canvas = el;
       ctx = canvas.getContext("2d");
       applyPalette(THEMES["tron-legacy"]);
-      buildMatch(n || 1);
+      buildMatch();
       resize();
       window.addEventListener("resize", resize);
       // A hidden tab stops getting animation frames; start a fresh loop on

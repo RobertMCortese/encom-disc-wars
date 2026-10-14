@@ -6,18 +6,16 @@ of six colour schemes.
 
 **[Watch it →](https://robertmcortese.github.io/encom-disc-wars/)**
 
-![The duel: a teal program and an orange sentinel on their rings](docs/duel.png)
+![Three teal programs against three orange sentinels, discs in the air between them](docs/match.png)
 
 ## Matches
 
-**1v1** is the duel. **2v2** and **3v3** put two ranks of platforms facing each
-other across a wider arena, every fighter on its own rings. As many exchanges
-run at once as there are fighters on a side, so a 3v3 keeps three discs in the
-air; fighters mostly stay on the opponent they are fighting, gang up on one
-left hanging from an edge, and now and then switch. A broken ring rises again
-on its own after a while, so a match left running never wears every platform
-away. The camera pulls back for a bigger match and drifts toward the action;
-the 1v1 keeps the fixed framing it was composed around.
+Every match is **three against three**: two ranks of platforms facing each
+other across the arena, every fighter on its own rings. Three exchanges run at
+once, so three discs are in the air; fighters mostly stay on the opponent they
+are fighting, gang up on one left hanging from an edge, and now and then
+switch. A broken ring rises again on its own after a while, so a match left
+running never wears every platform away. The camera drifts toward the action.
 
 A scoreboard across the top carries each side's name, a pip per fighter that
 goes dark as it is knocked out, and the rounds won, with the winning side
@@ -30,10 +28,8 @@ on. The rank thins out and spreads as the round wears on.
 
 A fighter that goes over the edge is **out for the round**. Nobody comes back
 until one side has been cleared off the board entirely; then every ring rises,
-both teams rez in and the next round begins. A team match is a war of
+both teams rez in and the next round begins. A match is a war of
 attrition — three a side worn down to one, and now and then a clean sweep.
-
-Pick a size on the page, or pass `?teams=2` / `?teams=3` in the URL.
 
 ## The Hall of Champions
 
@@ -41,21 +37,20 @@ Every fighter ever crowned is kept in the **Hall**, in this browser, so the
 stable is still there after you close the tab and come back. A champion's
 entry is its name, rank, record, named moves and its fly's learned weights
 (about 17 KB), and it is brought up to date after every round it is part of
-and the moment it falls. The **Hall** chip beside the match sizes shows how
+and the moment it falls. The **Hall** chip at the top of the page shows how
 many there are and opens the list, most decorated first.
 
 Tick a champion to field it and choose its side with the radio buttons;
-**Start Match** sets the match up from the ticks, up to three a side. One a
-side is a duel, two against two a team match, and it can be lopsided: one
-against three, two against three, one against two. A side nobody was picked
-for is filled with new programs, as many as the other side has champions.
+**Start Match** sets the match up from the ticks, up to three a side. Every
+seat nobody was picked for is filled with a new program, so a Hall match is
+three against three like any other.
 
 In a Hall match every champion picked keeps its seat for every round,
 fallen or not, rezzing with its fly and moves as they now stand; a round won
 while still standing counts toward its rank, as anywhere, and is saved back
 to the Hall. New programs filling an empty side are replaced each round with
-new flies, and nobody new is crowned. Picking 1v1, 2v2 or 3v3 goes back to
-ordinary matches.
+new flies, and nobody new is crowned. **Back to new programs**, in the Hall
+while a Hall match is on, goes back to ordinary matches.
 
 The Hall keeps the 120 most decorated; past that, or past what the browser
 will store, the least decorated make room.
@@ -132,7 +127,7 @@ bass and riffs down and lets them back up inside the beat, so they breathe
 with the kit instead of sitting on it.
 
 **The last stand builds.** When a side is down to its last fighter, or
-anybody is hanging off a ring edge (the only last stand a duel has), the pad
+anybody is hanging off a ring edge, the pad
 opens up and the riff's filter stops closing all the way. For as long as
 anybody is hanging on, the chord is arpeggiated high and quietly once an
 eighth. It is the one sound in the arena that is held rather than struck,
@@ -219,8 +214,7 @@ standing on the winning side with the most points for the round chooses.
 
 - **Dual Wield.** When a comrade falls, the champion takes up its disc and
   carries it in the other hand. With two discs it does not wait for one to come
-  back before throwing the other, so it throws twice as often. It needs a
-  comrade to fall, so it is not offered to a side of one.
+  back before throwing the other, so it throws twice as often.
 - **Disc Break.** Whenever the champion's disc meets another disc (a block, a
   catch overhead, two discs clashing in the air), there is a 1 in 10 chance
   the other disc shatters. A fighter with a broken disc cannot throw or block
@@ -252,8 +246,7 @@ standing on the winning side with the most points for the round chooses.
   air finish their flight. The champion and every ring on its side glow while
   it kneels. Then its side's rings all rise again and every fallen comrade
   rezzes back in on its platform (or an empty one), the way a new round brings
-  them back. The knockouts still count to whoever made them. It is not offered
-  to a side of one.
+  them back. The knockouts still count to whoever made them.
 - **General Tesler Arm.** About one attack in 23, the champion launches its
   hand instead of its disc. The hand goes at a sixth of a disc's speed, jagging
   like a lightning bolt on its way to the target, and lays a light-cycle wall
@@ -274,6 +267,88 @@ standing on the winning side with the most points for the round chooses.
   them, and can neither throw nor guard: every disc thrown at it gets through.
   They drop off when the ten seconds are up, or when it falls. A grid bug is
   green: four legs and an upside-down triangle of a head with a purple eye.
+- **Sequencer Disc.** One attack in 25, two more discs of light follow the
+  real one out of the hand, a beat apart: three at the same target, each with
+  its own aim and its own guard to beat. The extra two are gone once they have
+  been caught, have landed, or have gone past; only the real one comes home.
+- **Cluster Disc.** One attack in 30, the disc is thrown at a point in the air
+  just short of its target and bursts there. The shards may catch the target
+  (1 in 2) or an enemy on the next pad along (1 in 3), unless they see it
+  coming or a shield square is in the way. A shard that lands knocks back, or
+  1 time in 3 derezzes. The disc pulls itself back together and flies home.
+- **Rinzler's Reflexes.** A third of the throws that beat the champion's guard
+  it gets out of the way of anyway. Whenever a throw goes past it, it often
+  flips clear and throws straight back on landing, while the thrower's disc is
+  still out and it has nothing to guard with.
+- **Black Guard Staff.** A light staff slung across the champion's back. The
+  first throw each round that would land on it is turned aside, off at an
+  angle; 3 times in 10 the disc carries on into somebody else, friend or foe,
+  and knocks them back.
+- **Energy Pool.** Once a round, when the champion is short of a ring or of
+  MCP Shield squares, it kneels and a pool of light wells up from its platform:
+  two shield squares come back, or, with none missing, a broken ring.
+- **Sark's Enlargement.** One attack in 40, the MCP makes the champion a giant
+  for 15 seconds. Its throws are stopped half as often and land half again as
+  often, and throws at it land half again as often too.
+- **Solar Sailer Rescue.** Once a round, the first comrade going over the edge
+  is caught in a Solar Sailer's beam instead, lifted, and set back down in the
+  middle of its own platform.
+- **Isomorphic Glitch.** Once a round, a hit that would derez the champion only
+  makes it glitch: it flickers and jumps about for a moment and fights on.
+  This is on top of a champion's free hit.
+- **Renegade Mask.** When the champion is the last of its side standing, a
+  band of light masks its face and every throw it makes is stopped half as
+  often and lands twice as often.
+- **Permanence Code.** The programs its side calls in mid-round, Athena's and
+  the Rectified, stay on its side for the rest of the match instead of being
+  replaced at the end of the round.
+- **Prankster Bit.** One attack in 45, a Bit tumbles out and opens a black hole
+  in the air beside an opponent. A second later it pulls: the opponent (7 in
+  10) and anybody standing close by (4 in 10) are dragged back a ring, or off
+  an edge to hang from it.
+- **Light Tank.** One attack in 40, a light tank rolls out along the floor far
+  below, stops under the opponent, and fires a slow red bolt up at the ring it
+  is standing on. It cannot be guarded; about half the time the opponent gets
+  clear in time. Either way the ring is gone.
+- **Light Cycle Run.** One attack in 50, a light cycle rides straight through
+  the other side's rank, laying its wall behind it. Anybody standing in its
+  path loses the ring under them, unless they jump it (3 in 10).
+- **Recognizer Strike.** One attack in 50, a Recognizer comes down out of the
+  dark over an opponent, its shadow growing on the ring, and stamps down on
+  either side of it. The ring it was standing on breaks away; 4 times in 10 it
+  flips clear first.
+- **Fuzzy Signature.** One attack in 30, the champion goes nearly invisible
+  for 8 seconds, and its throws are stopped half as often.
+- **Athena's Summons.** One attack in 40, with a comrade down, a red program
+  rezzes onto the empty platform to fight for the champion's side for the
+  rest of the round.
+- **Rectification.** One enemy in 4 that the champion takes out, with a
+  comrade's platform free, comes apart and streams across into it, and rezzes
+  there as one of the champion's side: its name, its named moves, and what its
+  fly knew.
+
+None of the programs called in this way is ever a champion or anybody from
+the Hall: they only take a fallen ordinary program's place.
+
+### The power tree
+
+Powers grow on a tree of five branches, each three tiers deep:
+
+| Branch | Tier 1 | Tier 2 | Tier 3 |
+|---|---|---|---|
+| **Disc** | Dual Wield, Disc Break | Sequencer Disc (from Dual Wield), Cluster Disc (from Disc Break) | Rinzler's Reflexes |
+| **MCP** | MCP Shield | Black Guard Staff, Energy Pool, MCP Absorb (all from the Shield) | Sark's Enlargement (from Absorb) |
+| **User** | Power of Flynn, Solar Sailer Rescue | Isomorphic Glitch (from Flynn), Renegade Mask (from the Sailer) | Permanence Code (from the Glitch) |
+| **Grid** | Bit, Grid Bugs | Prankster Bit (from the Bit), Light Tank (from the Bugs) | Light Cycle Run, Recognizer Strike (from the Tank) |
+| **Dillinger** | Tesler Arm | Fuzzy Signature, Athena's Summons (from the Arm) | Rectification (from Fuzzy Signature) |
+
+A power past the first tier is offered only once the champion holds one of
+the powers it grows from, and a champion holds one third-tier power at most.
+A winner is offered up to four powers: one always starts a branch it has not
+touched yet, when there is one, and one always goes further up a branch it
+has, when there is one. Each champion's tree, with what it holds and what it could choose
+next, opens from its row in the Hall. Champions that already held MCP Absorb
+without the Shield keep it.
 
 ## The fighters learn
 

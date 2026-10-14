@@ -287,9 +287,9 @@ standing on the winning side with the most points for the round chooses.
 - **Energy Pool.** Once a round, when the champion is short of a ring or of
   MCP Shield squares, it kneels and a pool of light wells up from its platform:
   two shield squares come back, or, with none missing, a broken ring.
-- **Sark's Enlargement.** One attack in 40, the MCP makes the champion a giant
+- **Sark's Enlargement.** One attack in 30, the MCP makes the champion a giant
   for 15 seconds. Its throws are stopped half as often and land half again as
-  often, and throws at it land half again as often too.
+  often, and throws at it land a quarter again as often.
 - **Solar Sailer Rescue.** Once a round, the first comrade going over the edge
   is caught in a Solar Sailer's beam instead, lifted, and set back down in the
   middle of its own platform.
@@ -310,10 +310,10 @@ standing on the winning side with the most points for the round chooses.
   below, stops under the opponent, and fires a slow red bolt up at the ring it
   is standing on. It cannot be guarded; about half the time the opponent gets
   clear in time. Either way the ring is gone.
-- **Light Cycle Run.** One attack in 50, a light cycle rides straight through
+- **Light Cycle Run.** One attack in 55, a light cycle rides straight through
   the other side's rank, laying its wall behind it. Anybody standing in its
   path loses the ring under them, unless they jump it (3 in 10).
-- **Recognizer Strike.** One attack in 50, a Recognizer comes down out of the
+- **Recognizer Strike.** One attack in 40, a Recognizer comes down out of the
   dark over an opponent, its shadow growing on the ring, and stamps down on
   either side of it. The ring it was standing on breaks away; 4 times in 10 it
   flips clear first.
@@ -322,8 +322,8 @@ standing on the winning side with the most points for the round chooses.
 - **Athena's Summons.** One attack in 40, with a comrade down, a red program
   rezzes onto the empty platform to fight for the champion's side for the
   rest of the round.
-- **Rectification.** One enemy in 4 that the champion takes out, with a
-  comrade's platform free, comes apart and streams across into it, and rezzes
+- **Rectification.** Three enemies in 4 that the champion takes out, with a
+  comrade's platform free, come apart and stream across into it, and rez
   there as one of the champion's side: its name, its named moves, and what its
   fly knew.
 

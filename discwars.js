@@ -1811,7 +1811,7 @@
       var hard = fs[q].champion ? CHAMP.tough : 1;          // champions are harder to catch
       if (armOut(q)) hard *= ARM_OUT_HARD;                  // and harder still with the hand out
       var land = CONNECT * hard * (byHand || rene ? 2 : giant ? 1.5 : 1)   // a hand lands twice as often
-                 * (fs[q].big > wall ? 1.5 : 1);                          // and a giant is easy to hit
+                 * (fs[q].big > wall ? 1.25 : 1);                         // and a giant is easier to hit
       if (call.through && (yes || Math.random() < land + edge(know && know.used, 0.18))) {
         // It found its mark: knocked back a ring and stunned, or derezzed.
         // The Bit's YES is the second: it does not knock anyone back.
@@ -2133,7 +2133,7 @@
     pool: { name: "ENERGY POOL",
             text: "Once a round, short a ring or shield squares, it kneels at a pool that wells up from its platform: two squares back, or a ring." },
     sark: { name: "SARK'S ENLARGEMENT",
-            text: "1 in 40 attacks, the MCP makes it a giant for 15 seconds: its throws stopped half as often and landing half again as often, and throws at it landing half again as often." },
+            text: "1 in 30 attacks, the MCP makes it a giant for 15 seconds: its throws stopped half as often and landing half again as often, and throws at it landing a quarter again as often." },
     sailer: { name: "SOLAR SAILER RESCUE",
               text: "Once a round, a comrade going over the edge is caught in a Solar Sailer's beam and set back down on its platform." },
     iso: { name: "ISOMORPHIC GLITCH",
@@ -2147,15 +2147,15 @@
     tank: { name: "LIGHT TANK",
             text: "1 in 40 attacks, a light tank rolls out on the floor below and fires a slow bolt up at an opponent's ring. Dodged, never guarded." },
     cycle: { name: "LIGHT CYCLE RUN",
-             text: "1 in 50 attacks, a light cycle rides through the other side's rank. Its wall takes out the ring under anybody in its path who does not jump it." },
+             text: "1 in 55 attacks, a light cycle rides through the other side's rank. Its wall takes out the ring under anybody in its path who does not jump it." },
     recognizer: { name: "RECOGNIZER STRIKE",
-                  text: "1 in 50 attacks, a Recognizer comes down over an opponent and stamps out the ring it stands on, unless it gets clear in time." },
+                  text: "1 in 40 attacks, a Recognizer comes down over an opponent and stamps out the ring it stands on, unless it gets clear in time." },
     fuzzy: { name: "FUZZY SIGNATURE",
              text: "1 in 30 attacks, it goes nearly invisible for 8 seconds, and its throws are stopped half as often." },
     athena: { name: "ATHENA'S SUMMONS",
               text: "1 in 40 attacks, with a comrade down, it calls a red program off the Grid onto the empty platform, to fight for the round." },
     rectify: { name: "RECTIFICATION",
-               text: "1 in 4 enemies it takes out stream across to an empty platform on its side and rez there as its own." },
+               text: "3 in 4 enemies it takes out stream across to an empty platform on its side and rez there as its own." },
     bugs: { name: "GRID BUGS",
             text: "1 in 40 attacks, five grid bugs rise from the floor below it, scuttle to one opponent and climb on: 10 seconds wriggling, no throwing, no guarding." }
   };
@@ -2195,10 +2195,10 @@
   var SEQ_CHANCE = 1 / 25, SEQ_EXTRA = 2, SEQ_GAP = 0.22;   // fight seconds between discs
   var CLUSTER_CHANCE = 1 / 30, CLUSTER_REACH = 6;           // metres: the next pad along is caught
   var RINZ_DODGE = 0.35, RINZ_COUNTER = 0.6;
-  var SARK_CHANCE = 1 / 40, SARK_TIME = 15, SARK_SCALE = 1.7;   // real seconds; how much bigger
+  var SARK_CHANCE = 1 / 30, SARK_TIME = 15, SARK_SCALE = 1.7;   // real seconds; how much bigger
   var FUZZY_CHANCE = 1 / 30, FUZZY_TIME = 8;
-  var ATHENA_CHANCE = 1 / 40, RECTIFY_CHANCE = 0.25, POOL_CHANCE = 0.35;
-  var PRANK_CHANCE = 1 / 45, TANK_CHANCE = 1 / 40, CYCLE_CHANCE = 1 / 50, RECOG_CHANCE = 1 / 50;
+  var ATHENA_CHANCE = 1 / 40, RECTIFY_CHANCE = 0.75, POOL_CHANCE = 0.35;
+  var PRANK_CHANCE = 1 / 45, TANK_CHANCE = 1 / 40, CYCLE_CHANCE = 1 / 55, RECOG_CHANCE = 1 / 40;
   var RED = "#ff3b30";
   function powerInfo(id) { return POWERS[id] || PLANNED[id] || null; }
   var BUG_CHANCE = 1 / 40, BUG_COUNT = 5, BUG_HOLD = 10, BUG_SPEED = 3.4;   // metres a second
